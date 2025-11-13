@@ -16,7 +16,6 @@ export interface PlatformUser {
 export interface OAuthState {
   organizationId: string;
   userId: string;
-  redirectUri?: string;
   timestamp?: number;
 }
 
