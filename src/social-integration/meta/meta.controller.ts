@@ -73,33 +73,6 @@ export class MetaController {
     return this.metaService.getUserProfile(accessToken);
   }
 
-  // -------------------------------------------------------------------------
-  // PUBLISHING
-  // -------------------------------------------------------------------------
-
-  @Post('instagram/publish')
-  @ApiOperation({
-    summary: 'Publish media to Instagram Business Account',
-    description:
-      'Publishes an image or video with a caption to a connected Instagram Business Account.',
-  })
-  @ApiResponse({ status: 200, description: 'Returns result of publish operation.' })
-  async publishToInstagram(
-    @Body()
-    body: {
-      instagramAccountId: string;
-      pageAccessToken: string;
-      imageUrl?: string;
-      videoUrl?: string;
-      caption?: string;
-    },
-  ) {
-    const { instagramAccountId, pageAccessToken, ...content } = body;
-    if (!instagramAccountId || !pageAccessToken)
-      throw new BadRequestException('instagramAccountId and pageAccessToken are required');
-
-    return this.metaService.publishToInstagram(instagramAccountId, pageAccessToken, content);
-  }
 
   // -------------------------------------------------------------------------
   // DISCONNECT / TOKEN MANAGEMENT

@@ -9,7 +9,6 @@ import {
   FacebookAdsApi,
   User,
   Page,
-  InstagramUser,
 } from 'facebook-nodejs-business-sdk';
 import { EncryptionService } from 'src/common/utility/encryption.service';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -20,7 +19,7 @@ import { SocialAccountService } from 'src/social-account/social-account.service'
 @Injectable()
 export class MetaService {
   private readonly logger = new Logger(MetaService.name);
-  private readonly graphApiBase = 'https://graph.facebook.com/v19.0';
+  private readonly graphApiBase = 'https://graph.facebook.com/v23.0';
 
   constructor(
     private readonly prisma: PrismaService,
@@ -43,21 +42,19 @@ export class MetaService {
   async generateAuthUrl(
     organizationId: string,
     userId: string,
-    redirectUri?: string,
   ) {
     // Create state token to prevent CSRF
     const state: OAuthState = {
       organizationId,
       userId,
-      redirectUri,
-      timestamp: Date.now(), // Add timestamp for expiration
+      timestamp: Date.now(),
     };
 
     const encryptedState = await this.encryptionService.encrypt(
       JSON.stringify(state),
     );
 
-    const base = `https://www.facebook.com/v19.0/dialog/oauth`;
+    const base = `https://www.facebook.com/v23.0/dialog/oauth`;
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: process.env.META_CLIENT_ID!,
@@ -96,20 +93,15 @@ export class MetaService {
     });
 
     try {
-      // Exchange code for user access token
       const tokenData = await this.exchangeCodeForToken(code);
-      console.log('Token Data:', tokenData);
 
-      // Debug token to get detailed information
       const debugToken = await this.debugToken(tokenData.access_token);
-      console.log('Debug Token:', debugToken);
-      // Get user profile
+    
       const userProfile = await this.getUserProfile(tokenData.access_token);
       console.log('User Profile:', userProfile);
 
       // Get user pages with their access tokens
       const userPages = await this.getUserPages(tokenData.access_token);
-      console.log('User Pages:', userPages);
 
       // Calculate token expiration
       const tokenExpiresAt = this.calculateTokenExpiration(
@@ -117,7 +109,6 @@ export class MetaService {
         debugToken,
       );
 
-      // Encrypt user access token
       const encryptedAccessToken = await this.encryptionService.encrypt(
         tokenData.access_token,
       );
@@ -482,7 +473,7 @@ export class MetaService {
   }
 
   /**
-   * Get Instagram business account linked to a Facebook page using SDK
+   * Get Instagram business account linked to a Facebook page
    */
   async getInstagramBusinessAccount(
     pageId: string,
@@ -506,94 +497,6 @@ export class MetaService {
     }
   }
 
-  /**
-   * Get page insights using SDK
-   */
-  async getPageInsights(
-    pageId: string,
-    pageAccessToken: string,
-    metrics: string[] = ['page_impressions'],
-  ): Promise<any[]> {
-    try {
-      this.initMetaAPI(pageAccessToken);
-      const page = new Page(pageId);
-
-      const insights = await page.getInsights(metrics, {
-        // Optional: Add date range or other parameters
-      });
-
-      return insights.map((insight) => ({
-        name: insight.name,
-        period: insight.period,
-        values: insight.values,
-        title: insight.title,
-        description: insight.description,
-      }));
-    } catch (error) {
-      this.logger.error('Error fetching page insights', error);
-      throw new BadRequestException('Could not fetch page insights');
-    }
-  }
-
-  /**
-   * Publish to Instagram using SDK
-   */
-  async publishToInstagram(
-    instagramAccountId: string,
-    pageAccessToken: string,
-    content: {
-      imageUrl?: string;
-      videoUrl?: string;
-      caption?: string;
-    },
-  ): Promise<any> {
-    try {
-      this.initMetaAPI(pageAccessToken);
-      const igAccount = new InstagramUser(instagramAccountId);
-
-      let creationResult;
-
-      if (content.imageUrl) {
-        // Create container for image
-        creationResult = await igAccount.createMedia(
-          [InstagramUser.Fields.image_url, InstagramUser.Fields.caption],
-          {
-            image_url: content.imageUrl,
-            caption: content.caption,
-          },
-        );
-      } else if (content.videoUrl) {
-        // Create container for video
-        creationResult = await igAccount.createMedia(
-          [
-            InstagramUser.Fields.media_type,
-            InstagramUser.Fields.video_url,
-            InstagramUser.Fields.caption,
-          ],
-          {
-            media_type: 'VIDEO',
-            video_url: content.videoUrl,
-            caption: content.caption,
-          },
-        );
-      } else {
-        throw new Error('Either imageUrl or videoUrl is required');
-      }
-
-      // Publish the container
-      const publishResult = await igAccount.createMediaPublish(
-        [InstagramUser.Fields.creation_id],
-        {
-          creation_id: creationResult.id,
-        },
-      );
-
-      return publishResult;
-    } catch (error) {
-      this.logger.error('Error publishing to Instagram', error);
-      throw new BadRequestException('Failed to publish to Instagram');
-    }
-  }
 
   /**
    * Revoke app permissions (disconnect) using HTTP call
