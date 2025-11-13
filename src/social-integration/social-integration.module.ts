@@ -8,6 +8,7 @@ import { LinkedInService } from './platforms/linkedin.service';
 import { XService } from './platforms/x.service';
 import { EncryptionService } from 'src/common/utility/encryption.service';
 import { MetaModule } from './meta/meta.module';
+import { LinkedinModule } from './linkedin/linkedin.module';
 
 
 @Module({
@@ -15,6 +16,7 @@ import { MetaModule } from './meta/meta.module';
     SocialAccountModule,
     HttpModule,
     MetaModule,
+    LinkedinModule,
   ],
   controllers: [SocialIntegrationController],
   providers: [
