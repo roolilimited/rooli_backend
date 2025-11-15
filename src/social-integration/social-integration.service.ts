@@ -41,7 +41,7 @@ export class SocialIntegrationService {
     }
 
     // Create state token to prevent CSRF
-    const state: OAuthState = { organizationId, userId, redirectUri };
+    const state: OAuthState = { organizationId, userId };
     const encryptedState = await this.encryptionService.encrypt(
       JSON.stringify(state),
     );
@@ -105,7 +105,6 @@ export class SocialIntegrationService {
       return {
         success: true,
         account: socialAccount,
-        redirectUri: stateData.redirectUri,
       };
     } catch (error) {
       this.logger.error(`OAuth callback failed for ${platform}:`, error);
