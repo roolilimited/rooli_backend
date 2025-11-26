@@ -4,8 +4,8 @@ import {
   ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateMemberDto } from './dtos/update-member.dto';
+import { PrismaService } from '@/prisma/prisma.service';
 
 @Injectable()
 export class MembersService {

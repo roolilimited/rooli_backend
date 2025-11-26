@@ -1,5 +1,5 @@
+import { UserRole } from '@generated/enums';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { UserRole } from '@prisma/client';
 import {
   IsEmail,
   IsString,

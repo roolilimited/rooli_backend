@@ -1,9 +1,10 @@
 import { Body, Controller, Delete, Get, Logger, NotFoundException, Param, Patch, Post } from '@nestjs/common';
 import { SocialAccountService } from './social-account.service';
 import { ApiTags, ApiOperation, ApiBody, ApiResponse, ApiParam } from '@nestjs/swagger';
-import { SocialAccount, Platform } from '@prisma/client';
 import { CreateSocialAccountDto } from './dtos/create-account.dto';
 import { UpdateSocialAccountDto } from './dtos/update-social-account.dto';
+import { SocialAccount } from '@generated/client';
+import { Platform } from '@generated/enums';
 
 @ApiTags('Social Accounts')
 @Controller('social-accounts')

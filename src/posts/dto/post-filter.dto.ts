@@ -7,9 +7,9 @@ import {
   Min,
   IsUUID,
 } from 'class-validator';
-import { Platform, PostStatus } from '@prisma/client';
-import { PaginationDto } from 'src/common/dtos/pagination.dto';
 import { ApiPropertyOptional } from '@nestjs/swagger';
+import { PaginationDto } from '@/common/dtos/pagination.dto';
+import { PostStatus, Platform } from '@generated/enums';
 
 export class PostFilterDto extends PaginationDto {
   @ApiPropertyOptional({

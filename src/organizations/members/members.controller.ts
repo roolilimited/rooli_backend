@@ -9,7 +9,6 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { UpdateMemberDto } from './dtos/update-member.dto';
 import { MembersService } from './members.service';
 import {
@@ -18,6 +17,7 @@ import {
   ApiOperation,
   ApiResponse,
 } from '@nestjs/swagger';
+import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 
 @ApiTags('Organization Members')
 @ApiBearerAuth()

@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap } from 'rxjs/operators';
-import { PermissionService } from 'src/role-permissions/role-permission.service';
 import { AuthenticatedUser } from '../decorators/permissions.decorator';
+import { PermissionService } from '@/role-permissions/role-permission.service';
 
 @Injectable()
 export class PermissionContextInterceptor implements NestInterceptor {

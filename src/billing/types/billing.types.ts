@@ -1,6 +1,5 @@
-import { PlanTier, BillingInterval } from '@prisma/client';
+import { PlanTier, BillingInterval } from "@generated/enums";
 
-// src/billing/types/billing.types.ts
 export interface PlanConfig {
   tier: PlanTier;
   name: string;

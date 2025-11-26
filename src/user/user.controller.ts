@@ -11,11 +11,11 @@ import {
 } from '@nestjs/common';
 import { UserService } from './user.service';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { SafeUser } from 'src/auth/dtos/AuthResponse.dto';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { ChangePasswordDto } from './dtos/change-password.dto';
 import { UpdateProfileDto } from './dtos/update-profile.dto';
 import { UserFiltersDto } from './dtos/user-filters.dto';
+import { SafeUser } from '@/auth/dtos/AuthResponse.dto';
+import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 
 @ApiTags('Users')
 @UseGuards(JwtAuthGuard)

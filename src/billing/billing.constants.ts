@@ -1,4 +1,4 @@
-import { PlanTier } from '@prisma/client';
+import { PlanTier } from '@generated/enums';
 import { PlanConfig } from './types/billing.types';
 
 // src/billing/billing.constants.ts

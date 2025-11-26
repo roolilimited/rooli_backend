@@ -19,7 +19,7 @@ import {
 } from '@nestjs/swagger';
 import { CreateBrandKitDto } from './dtos/create-brand-kit.dto';
 import { UpdateBrandKitDto } from './dtos/update-brand-kit.dto';
-import { BrandKit } from '@prisma/client';
+import { BrandKit } from '@generated/client';
 
 @ApiTags('Brand Kit')
 @ApiBearerAuth()

@@ -1,9 +1,8 @@
-// src/engagement/workers/engagement.worker.ts
 import {  Processor } from '@nestjs/bullmq';
 import { Job } from 'bull';
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Platform } from '@prisma/client';
+import { Platform } from '@generated/enums';
 
 @Injectable()
 @Processor('engagement-processing')

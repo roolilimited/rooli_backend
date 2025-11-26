@@ -1,12 +1,12 @@
 import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { BillingService } from './billing.service';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { OrganizationGuard } from 'src/common/guards/organization.guard';
 import { RecordUsageDto } from './dtos/usage-record.dto';
 import {
   CreateCheckoutSessionDto,
   BillingPortalSessionDto,
 } from './types/billing.types';
+import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
+import { OrganizationGuard } from '@/common/guards/organization.guard';
 
 @Controller('billing')
 @UseGuards(JwtAuthGuard)

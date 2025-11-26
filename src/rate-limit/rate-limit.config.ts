@@ -1,5 +1,4 @@
-import { Platform } from "@prisma/client";
-
+import { Platform } from "@generated/enums";
 
 export interface RateLimitConfig {
   window: number; // in seconds
@@ -47,17 +46,3 @@ export const PLATFORM_RATE_LIMITS = {
     default: { limit: 100, window: 3600 },
   },
 };
-
-// Map enum to key in PLATFORM_RATE_LIMITS
-export const PLATFORM_KEY_MAP: Record<Platform, string> = {
-  [Platform.X]: 'twitter',
-  [Platform.FACEBOOK]: 'facebook',
-  [Platform.INSTAGRAM]: 'instagram',
-  [Platform.LINKEDIN]: 'linkedin',
-  [Platform.META]: 'meta',
-  [Platform.AI]: 'ai',
-  [Platform.API]: 'api',
-  GENERAL: 'general',
-};
-
-//

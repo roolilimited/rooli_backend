@@ -1,5 +1,6 @@
+import { Platform, ContentType } from '@generated/enums';
 import { ApiProperty } from '@nestjs/swagger';
-import { ContentType, Platform } from '@prisma/client';
+
 import {
   IsString,
   IsOptional,
@@ -13,6 +14,10 @@ export class CreatePostDto {
   @ApiProperty({ description: 'Social account to publish under' })
   @IsString()
   socialAccountId: string;
+
+  @ApiProperty({ description: 'Page account to publish under' })
+  @IsString()
+  pageAccountId: string;
 
   @ApiProperty({ description: 'Main content of the post' })
   @IsString()
@@ -56,7 +61,11 @@ export class CreatePostDto {
   @IsOptional()
   metadata?: Record<string, any>;
 
-  @ApiProperty({ description: 'Scheduled time for the post', required: false, example: "2025-10-21T14:30:00.000" })
+  @ApiProperty({
+    description: 'Scheduled time for the post',
+    required: false,
+    example: '2025-10-21T14:30:00.000',
+  })
   @IsOptional()
   scheduledAt?: string;
 
@@ -65,5 +74,5 @@ export class CreatePostDto {
     example: 'Africa/Lagos',
   })
   @IsString()
-   timezone: string;
+  timezone: string;
 }

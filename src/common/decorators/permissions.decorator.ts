@@ -1,3 +1,4 @@
+import { PermissionResource, PermissionAction } from '@generated/enums';
 import { SetMetadata } from '@nestjs/common';
 
 
@@ -21,7 +22,6 @@ export const RequireSocialAccountPermission = (resource: PermissionResource, act
 
 // src/rbac/decorators/current-user.decorator.ts
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { PermissionResource, PermissionAction } from '@prisma/client';
 
 export interface AuthenticatedUser {
   id: string;

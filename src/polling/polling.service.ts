@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { LinkedinPollingService } from './linkedin-polling.service';
 import { XPollingService } from './x-polling.service';
-import { Platform } from '@prisma/client';
+import { Platform } from '@generated/enums';
 
 @Injectable()
 export class PollingService {

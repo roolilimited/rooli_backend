@@ -5,16 +5,15 @@ import {
   UnauthorizedException,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  FacebookAdsApi,
-  User,
-  Page,
-} from 'facebook-nodejs-business-sdk';
-import { EncryptionService } from 'src/common/utility/encryption.service';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { FacebookAdsApi, User, Page } from 'facebook-nodejs-business-sdk';
+
 import { OAuthState } from '../interfaces/platform-service.interface';
-import { Platform } from '@prisma/client';
-import { SocialAccountService } from 'src/social-account/social-account.service';
+import { SocialAccountMetadata } from '../linkedin/interfaces/index.interface';
+import { EncryptionService } from '@/common/utility/encryption.service';
+import { PrismaService } from '@/prisma/prisma.service';
+import { SocialAccountService } from '@/social-account/social-account.service';
+import { Platform } from '@generated/enums';
+import { Prisma } from '@generated/client';
 
 @Injectable()
 export class MetaService {
@@ -39,10 +38,7 @@ export class MetaService {
   /**
    * Generate Business Login URL with proper scopes
    */
-  async generateAuthUrl(
-    organizationId: string,
-    userId: string,
-  ) {
+  async generateAuthUrl(organizationId: string, userId: string) {
     // Create state token to prevent CSRF
     const state: OAuthState = {
       organizationId,
@@ -83,7 +79,7 @@ export class MetaService {
   async handleOAuthCallback(
     code: string,
     encryptedState: string,
-  ): Promise<{ success: boolean; accountId: string }> {
+  ): Promise<{ success: boolean; accountId: string; pages: any[] }> {
     const stateData = await this.decryptAndValidateState(encryptedState);
     const { organizationId, userId } = stateData;
 
@@ -96,7 +92,7 @@ export class MetaService {
       const tokenData = await this.exchangeCodeForToken(code);
 
       const debugToken = await this.debugToken(tokenData.access_token);
-    
+
       const userProfile = await this.getUserProfile(tokenData.access_token);
       console.log('User Profile:', userProfile);
 
@@ -137,8 +133,12 @@ export class MetaService {
       const socialAccount =
         await this.socialAccountService.upsertSocialAccount(accountData);
 
+      await this.updateSocialAccountMetadata(socialAccount.id, {
+        lastDiscoveredPages: userPages,
+      });
+
       // Store pages in PageAccount model
-      await this.syncUserPages(socialAccount.id, userPages);
+      //await this.syncUserPages(socialAccount.id, userPages);
 
       this.logger.log(
         `Successfully connected Meta account ${userProfile.name} with ${userPages.length} pages`,
@@ -148,6 +148,7 @@ export class MetaService {
       return {
         success: true,
         accountId: socialAccount.id,
+        pages: userPages,
       };
     } catch (error) {
       this.logger.error('Meta OAuth callback failed', {
@@ -159,6 +160,84 @@ export class MetaService {
     }
   }
 
+  async connectSelectedPages(
+    socialAccountId: string,
+    pageIds: string[],
+  ): Promise<{ connectedPages: any[]; failedPages: string[] }> {
+    if (!pageIds?.length) {
+      throw new BadRequestException('No page IDs provided');
+    }
+
+    const account = await this.prisma.socialAccount.findUnique({
+      where: { id: socialAccountId },
+      select: { metadata: true, id: true },
+    });
+
+    if (!account) {
+      throw new NotFoundException('Social account not found');
+    }
+
+    const metadata = (account.metadata || {}) as any;
+    const allPages: any[] = metadata.lastDiscoveredPages ?? [];
+
+    if (!allPages.length) {
+      throw new BadRequestException('No cached pages available to connect');
+    }
+
+    const selectedPages = allPages.filter((p) => pageIds.includes(p.id));
+
+    if (!selectedPages.length) {
+      throw new BadRequestException('No valid pages found for provided IDs');
+    }
+
+    const results = await this.syncUserPages(socialAccountId, selectedPages);
+
+    // You can compute successes/failures from results if you want
+    return {
+      connectedPages: results,
+      failedPages: [],
+    };
+  }
+
+  private async updateSocialAccountMetadata(
+    accountId: string,
+    updates: Partial<SocialAccountMetadata>,
+  ): Promise<void> {
+    const account = await this.prisma.socialAccount.findUnique({
+      where: { id: accountId },
+      select: { metadata: true },
+    });
+
+    if (!account) {
+      throw new BadRequestException('Social account not found');
+    }
+
+    const existingMeta = this.parseMetadata(account.metadata);
+
+    const merged: SocialAccountMetadata = {
+      ...existingMeta,
+      ...updates,
+    };
+
+    await this.prisma.socialAccount.update({
+      where: { id: accountId },
+      data: {
+        metadata: merged as Prisma.InputJsonValue,
+        lastSyncAt: new Date(),
+      },
+    });
+  }
+
+  private parseMetadata(metadata: unknown): SocialAccountMetadata {
+    if (this.isValidObject(metadata)) {
+      return metadata as SocialAccountMetadata;
+    }
+    return {};
+  }
+
+  private isValidObject(value: unknown): value is Record<string, any> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+  }
   /**
    * Exchange code for access token
    */
@@ -251,7 +330,6 @@ export class MetaService {
                 category: page.category,
                 instagramData: igAccount,
                 tasks: page.tasks,
-                canPost: page.tasks?.includes('CREATE_CONTENT') || false,
                 lastSynced: new Date(),
               },
               updatedAt: new Date(),
@@ -496,7 +574,6 @@ export class MetaService {
       return null;
     }
   }
-
 
   /**
    * Revoke app permissions (disconnect) using HTTP call

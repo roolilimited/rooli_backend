@@ -1,7 +1,7 @@
+import { PrismaService } from '@/prisma/prisma.service';
+import { Platform } from '@generated/enums';
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Platform } from '@prisma/client';
-import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class PollingProcessingService {

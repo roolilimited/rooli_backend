@@ -1,8 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TemplateContentDto } from './template-content.dto';
-import { Platform, ContentType, TemplateCategory } from '@prisma/client'; // adjust import
+
 import { IsBoolean, IsEnum, IsOptional, IsString, IsArray, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+import { Platform, ContentType, TemplateCategory } from '@generated/enums';
 
 export class CreateTemplateDto {
   @ApiProperty({ example: 'Summer Sale Post', description: 'Template name' })

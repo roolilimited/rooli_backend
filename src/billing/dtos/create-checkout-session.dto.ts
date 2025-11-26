@@ -1,6 +1,5 @@
-// src/billing/dto/create-checkout-session.dto.ts
+import { PlanTier, BillingInterval } from '@generated/enums';
 import { IsEnum, IsUrl, IsOptional } from 'class-validator';
-import { PlanTier, BillingInterval } from '@prisma/client';
 
 export class CreateCheckoutSessionDto {
   @IsEnum(PlanTier)

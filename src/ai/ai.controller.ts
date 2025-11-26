@@ -8,7 +8,6 @@ import {
   Delete,
   Req,
 } from '@nestjs/common';
-import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import {
   ApiTags,
   ApiBearerAuth,
@@ -20,16 +19,15 @@ import {
 import { GenerateContentDto } from './dtos/generate-content.dto';
 import { AiContentService } from './services/ai-content.service';
 import { EnhanceContentDto } from './dtos/enhance-content.dto';
-import { RateLimitGuard } from 'src/common/guards/rate-limiter.guard';
-import { RateLimit } from 'src/common/decorators/rate-limit.decorator';
 import { GenerateImageDto } from './dtos/generate-image.dto';
 import { AiImageService } from './services/ai-image.service';
 import { AiUsageService } from './services/ai-usage.service';
+import { CurrentUser } from '@/auth/decorators/current-user.decorator';
+import { RateLimit } from '@/common/decorators/rate-limit.decorator';
 
 @ApiTags('AI')
 @ApiBearerAuth()
 @Controller('ai/:organizationId')
-@UseGuards(RateLimitGuard)
 export class AiController {
   constructor(
     private readonly aiContentService: AiContentService,
@@ -38,7 +36,6 @@ export class AiController {
   ) {}
 
   @Post('generate/content')
-  @UseGuards(RateLimitGuard)
   //@RateLimit('CONTENT_GENERATION') // action name used in RateLimitService
   @ApiOperation({ summary: 'Generate AI-powered content' })
   async generateContent(
@@ -50,8 +47,6 @@ export class AiController {
   }
 
   @Post('enhance')
-  @UseGuards(RateLimitGuard)
-  @RateLimit('CONTENT_ENHANCEMENT')
   @ApiOperation({ summary: 'Enhance AI-generated content' })
   async enhanceContent(
     @CurrentUser('id') userId: string,
@@ -72,7 +67,6 @@ export class AiController {
   }
 
   @Post('generate/image')
-  @UseGuards(RateLimitGuard)
   @RateLimit('image_generation')
   @ApiOperation({ summary: 'Generate an AI image based on prompt' })
   @ApiBody({ type: GenerateImageDto })

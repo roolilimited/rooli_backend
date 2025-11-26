@@ -5,10 +5,10 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { Prisma } from '@prisma/client';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { v2 as cloudinary } from 'cloudinary';
+import { PrismaService } from '@/prisma/prisma.service';
+import { Prisma } from '@generated/client';
 
 @Injectable()
 export class MediaService {

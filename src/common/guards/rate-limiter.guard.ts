@@ -6,8 +6,8 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { TooManyRequestsException } from '../filters/too-many-requests.exception';
-import { RateLimitService } from 'src/rate-limit/rate-limit.service';
 import { RATE_LIMIT } from '../decorators/rate-limit.decorator';
+import { RateLimitService } from '@/rate-limit/rate-limit.service';
 
 @Injectable()
 export class RateLimitGuard implements CanActivate {
@@ -30,11 +30,11 @@ export class RateLimitGuard implements CanActivate {
     if (!userId) return true; // optionally handle unauthenticated users
 
     try {
-      await this.rateLimitService.checkLimit(
-        'AI', // you can pass platform or action type here
-        userId,
-        action,
-      );
+      // await this.rateLimitService.checkLimit(
+      //   'AI', // you can pass platform or action type here
+      //   userId,
+      //   action,
+      // );
       return true;
     } catch (err: any) {
       if (err instanceof TooManyRequestsException) throw err;

@@ -1,5 +1,5 @@
+import { Prisma } from '@generated/client';
 import { ArgumentsHost, Catch, ExceptionFilter } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
 import { Response } from 'express';
 
 @Catch(Prisma.PrismaClientKnownRequestError)

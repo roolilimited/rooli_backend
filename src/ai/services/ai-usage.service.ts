@@ -1,7 +1,7 @@
 // src/ai/services/ai-usage.service.ts
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { TrackUsageParams } from '../interfaces/index.interface';
+import { PrismaService } from '@/prisma/prisma.service';
 
 @Injectable()
 export class AiUsageService {

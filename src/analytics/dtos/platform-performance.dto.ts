@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { AnalyticsSummary } from './analytics-summary.dto';
-import { Platform } from '@prisma/client';
-
+import { Platform } from '@generated/enums';
 export class PlatformPerformance {
   @ApiProperty({ enum: Platform, description: 'Platform name' })
   platform: Platform;

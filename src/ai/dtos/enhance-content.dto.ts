@@ -1,6 +1,5 @@
-// enhance-content.dto.ts
+import { Platform, ToneType } from '@generated/enums';
 import { ApiProperty } from '@nestjs/swagger';
-import { Platform, ToneType } from '@prisma/client';
 import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class EnhanceContentDto {

@@ -1,9 +1,9 @@
 import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { CreditType, PlanTier, BillingInterval } from '@prisma/client';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { PLANS, CREDIT_COST } from './billing.constants';
 import { RecordUsageDto } from './dtos/usage-record.dto';
 import { CreateCheckoutSessionDto, BillingPortalSessionDto, UpdateSubscriptionDto } from './types/billing.types';
+import { PrismaService } from '@/prisma/prisma.service';
+import { CreditType, PlanTier, BillingInterval } from '@generated/enums';
 
 
 @Injectable()

@@ -11,11 +11,11 @@ import {
   Logger,
 } from '@nestjs/common';
 import { WebhookService } from './webhook.service';
-import { Platform } from '@prisma/client';
 import { Response, Request } from 'express';
 import { IncomingHttpHeaders } from 'http';
 import { WebhookQueueService } from './queues/webhook-queue.service';
-import { Public } from 'src/auth/decorators/public.decorator';
+import { Public } from '@/auth/decorators/public.decorator';
+import { Platform } from '@generated/enums';
 
 /**
  * Utility to flatten HTTP headers (convert string[] values to single string)

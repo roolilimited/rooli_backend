@@ -6,12 +6,12 @@ import {
 } from '@nestjs/common';
 import { AiUsageService } from './ai-usage.service';
 import { GenerateImageDto } from '../dtos/generate-image.dto';
-import { BrandKitService } from 'src/brand-kit/brand-kit.service';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { StableDiffusionProvider } from 'src/ai/providers/stable-diffusion.service';
 import { HuggingFaceService } from '../providers/huggingface.provider';
-import * as cuid from 'cuid';
+import cuid from 'cuid';
 import { v2 as cloudinary } from 'cloudinary';
+import { BrandKitService } from '@/brand-kit/brand-kit.service';
+import { PrismaService } from '@/prisma/prisma.service';
+import { StableDiffusionProvider } from '../providers/stable-diffusion.service';
 
 @Injectable()
 export class AiImageService {

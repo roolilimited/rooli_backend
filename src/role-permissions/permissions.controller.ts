@@ -1,12 +1,13 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { PermissionService } from './role-permission.service';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { Permission, PermissionScope } from '@prisma/client';
 import { CreatePermissionDto } from './dtos/create-permission.dto';
 import {
   PermissionCheckDto,
   BatchPermissionCheckDto,
 } from './dtos/permission-check.dto';
+import { Permission } from '@generated/client';
+import { PermissionScope } from '@generated/enums';
 
 @ApiTags('Permissions')
 @Controller('permissions')

@@ -1,9 +1,9 @@
 import { Processor } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bull';
-import { Platform } from '@prisma/client';
 import { WebhookService } from '../webhook.service';
 import { WebhookProcessingService } from '../webhook-processing.service';
+import { Platform } from '@generated/enums';
 
 @Injectable()
 @Processor('webhook-processing') // This decorator makes it a consumer
@@ -38,7 +38,7 @@ export class WebhookWorker {
       );
 
       // 2. Business logic processing (analytics, inbox events)
-      await this.webhookProcessingService.processWebhookEvent(webhookEvent);
+      //await this.webhookProcessingService.processWebhookEvent(webhookEvent);
 
       this.logger.log(`[${platform}] Job ${job.id} completed successfully`);
     } catch (error) {

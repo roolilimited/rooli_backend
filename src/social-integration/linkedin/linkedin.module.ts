@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { LinkedInService } from './linkedIn.service';
 import { LinkedinController } from './linkedin.controller';
-import { EncryptionService } from 'src/common/utility/encryption.service';
 import { HttpModule } from '@nestjs/axios';
+import { EncryptionService } from '@/common/utility/encryption.service';
 
 @Module({
   imports: [HttpModule],

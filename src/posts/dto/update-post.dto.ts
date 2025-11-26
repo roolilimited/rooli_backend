@@ -1,5 +1,5 @@
+import { PostStatus } from '@generated/enums';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { PostStatus } from '@prisma/client';
 import { IsString, IsOptional, IsArray, IsDateString } from 'class-validator';
 
 export class UpdatePostDto {

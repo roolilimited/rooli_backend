@@ -1,5 +1,5 @@
+import { Platform } from '@generated/enums';
 import { ApiProperty } from '@nestjs/swagger';
-import { Platform } from '@prisma/client';
 import { IsEnum, IsNotEmpty, IsString } from 'class-validator';
 
 export class GetQuotaDto {

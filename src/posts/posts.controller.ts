@@ -27,7 +27,7 @@ import { PostsService } from './posts.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { PostFilterDto } from './dto/post-filter.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
-import { Platform } from '@prisma/client';
+import { Platform } from '@generated/enums';
 
 @ApiTags('Posts')
 @ApiBearerAuth()
@@ -156,26 +156,6 @@ export class PostsController {
     await this.postsService.deletePost(postId, organizationId);
   }
 
-  /**
-   * Trigger immediate publishing (admin or after approval)
-   */
-  @Post(':id/publish')
-  @ApiOperation({
-    summary: 'Force publish a post',
-    description:
-      'Immediately publishes a post after approval or for testing. Usually triggered by the scheduler or approval flow.',
-  })
-  @ApiResponse({ status: 200, description: 'Post published successfully' })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid post state for publishing',
-  })
-  async executePublish(
-    @Param('organizationId') organizationId: string,
-    @Param('id') postId: string,
-  ) {
-    return this.postsService.executePublish(organizationId, postId);
-  }
   
   @Get(':platform/:postId')
   @HttpCode(HttpStatus.OK)

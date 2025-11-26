@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { NotificationType, NotificationPriority } from '@prisma/client';
 import { NotificationAudienceService } from '../notification-audience.service';
 import { NotificationService } from '../notification.service';
+import { NotificationType, NotificationPriority } from '@generated/enums';
 
 export interface MentionEvent {
   userId: string;

@@ -9,8 +9,15 @@ import {
   Req,
   BadRequestException,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { MetaService } from './meta.service';
+import { ConnectMetaPagesDto } from './dto/connect-pages.dto';
 
 @ApiTags('Meta Integration')
 @ApiBearerAuth()
@@ -24,7 +31,10 @@ export class MetaController {
     description:
       'Generates the Meta (Facebook) Business Login URL that the user should be redirected to for OAuth authentication.',
   })
-  @ApiResponse({ status: 200, description: 'Returns the login URL and state token.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns the login URL and state token.',
+  })
   getAuthUrl(@Query('organizationId') organizationId: string, @Req() req) {
     return this.metaService.generateAuthUrl(organizationId, req.user.id);
   }
@@ -37,12 +47,29 @@ export class MetaController {
   })
   @ApiQuery({ name: 'code', required: true })
   @ApiQuery({ name: 'encryptedState', required: true })
-  @ApiResponse({ status: 200, description: 'Returns access token and expiry info.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns access token and expiry info.',
+  })
   async handleOAuthCallback(
     @Query('code') code: string,
     @Query('encryptedState') encryptedState: string,
   ) {
-    return this.metaService.handleOAuthCallback(code, decodeURIComponent(encryptedState),);
+    return this.metaService.handleOAuthCallback(
+      code,
+      decodeURIComponent(encryptedState),
+    );
+  }
+
+  @Post('pages/connect')
+  @ApiOperation({
+    summary: 'Connect selected Meta pages to the social account',
+  })
+  async connectPages(@Body() body: ConnectMetaPagesDto) {
+    return this.metaService.connectSelectedPages(
+      body.socialAccountId,
+      body.pageIds,
+    );
   }
 
   // -------------------------------------------------------------------------
@@ -55,7 +82,10 @@ export class MetaController {
     description:
       'Verifies if a provided Meta user access token is valid and retrieves user ID, scopes, and expiration.',
   })
-  @ApiResponse({ status: 200, description: 'Returns token validation details.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns token validation details.',
+  })
   async verifyToken(@Body('accessToken') accessToken: string) {
     if (!accessToken) throw new BadRequestException('accessToken is required');
     return this.metaService.verifyUserAccessToken(accessToken);
@@ -67,12 +97,14 @@ export class MetaController {
     description:
       'Fetches the Meta user profile (name, email, profile picture) using the provided user access token.',
   })
-  @ApiResponse({ status: 200, description: 'Returns Facebook user profile data.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns Facebook user profile data.',
+  })
   async getProfile(@Body('accessToken') accessToken: string) {
     if (!accessToken) throw new BadRequestException('accessToken is required');
     return this.metaService.getUserProfile(accessToken);
   }
-
 
   // -------------------------------------------------------------------------
   // DISCONNECT / TOKEN MANAGEMENT
@@ -93,11 +125,14 @@ export class MetaController {
   @Post('validate')
   @ApiOperation({
     summary: 'Validate Facebook access token',
-    description: 'Quickly validates whether a Facebook access token is still active and usable.',
+    description:
+      'Quickly validates whether a Facebook access token is still active and usable.',
   })
-  @ApiResponse({ status: 200, description: 'Returns true if valid, false otherwise.' })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns true if valid, false otherwise.',
+  })
   async validateToken(@Body('accessToken') accessToken: string) {
     return this.metaService.validateAccessToken(accessToken);
   }
 }
-

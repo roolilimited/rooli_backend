@@ -16,13 +16,13 @@ import {
   ApiOperation,
   ApiResponse,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { ContentTemplatesService } from './templates.service';
 import { CreateTemplateDto } from './dtos/create-template.dto';
 import { GenerateFromTemplateDto } from './dtos/generate-from-template.dto';
 import { UpdateTemplateDto } from './dtos/update-template.dto';
 import { TemplateFilterDto } from './dtos/get-org-templates.dto';
 import { GetSystemTemplatesDto } from './dtos/get-system-template.dto';
+import { JwtAuthGuard } from '@/auth/guards/jwt-auth.guard';
 
 @ApiTags('Content Templates')
 @ApiBearerAuth()

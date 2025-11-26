@@ -1,4 +1,3 @@
-// src/posts/posts.service.ts
 import {
   Injectable,
   Logger,
@@ -9,21 +8,23 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PostStatus, Platform, Prisma } from '@prisma/client';
-import { ApprovalsService } from 'src/approvals/approvals.service';
-import { PostingResult } from 'src/scheduling/scheduling.service';
 import { CreatePostDto } from './dto/create-post.dto';
-import { MediaService } from 'src/media/media.service';
 import { PostFilterDto } from './dto/post-filter.dto';
-import { PostPublishingService } from '../post-publishing/post-publishing.service';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { parseISO, isBefore } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 import { firstValueFrom } from 'rxjs';
-import { EncryptionService } from 'src/common/utility/encryption.service';
 import { HttpService } from '@nestjs/axios';
-import { PostMetadata, FacebookApiResponse, InstagramApiResponse } from './interfaces/index.interface';
-
+import {
+  PostMetadata,
+  FacebookApiResponse,
+  InstagramApiResponse,
+} from './interfaces/index.interface';
+import { ApprovalsService, PostingResult } from '@/approvals/approvals.service';
+import { EncryptionService } from '@/common/utility/encryption.service';
+import { MediaService } from '@/media/media.service';
+import { Prisma } from '@generated/client';
+import { PostStatus, Platform } from '@generated/enums';
 
 @Injectable()
 export class PostsService {
@@ -36,7 +37,6 @@ export class PostsService {
     private readonly prisma: PrismaService,
     private readonly approvalsService: ApprovalsService,
     private readonly mediaService: MediaService,
-    private readonly postPublishingService: PostPublishingService,
     private readonly encryptionService: EncryptionService,
     private readonly http: HttpService,
   ) {}
@@ -47,9 +47,12 @@ export class PostsService {
   async createPost(organizationId: string, userId: string, dto: CreatePostDto) {
     return this.prisma.$transaction(async (tx) => {
       // 1. Validate inputs and access
-      await this.validatePostCreation(organizationId, userId, dto, tx);
+      await this.validatePostCreation(organizationId, userId, dto);
 
       const mediaFileIds = dto.mediaFileIds || [];
+
+        // 2. Determine if this is a profile post or page post
+    const isProfilePost = !dto.pageAccountId;
 
       // 2. Always create as DRAFT initially
       const post = await tx.post.create({
@@ -57,15 +60,16 @@ export class PostsService {
           organizationId,
           authorId: userId,
           socialAccountId: dto.socialAccountId,
+          pageAccountId: dto.pageAccountId || null,
           content: dto.content,
           mediaFileIds,
           status: PostStatus.DRAFT,
           timezone: dto.timezone,
           scheduledAt: dto.scheduledAt,
+          platform: dto.platform,
           metadata: {
-            platform: dto.platform,
+            postType: isProfilePost ? 'PROFILE' : 'PAGE',
             contentType: dto.contentType,
-            mediaFileIds,
             ...dto.metadata,
           } as Prisma.JsonValue,
         },
@@ -102,7 +106,7 @@ export class PostsService {
       }
 
       // 2. Create approval request record
-      await this.approvalsService.createApprovalRequest(postId, userId, tx);
+      await this.approvalsService.createApprovalRequest(postId, userId);
 
       // 3. Update post status to PENDING_APPROVAL
       const updatedPost = await tx.post.update({
@@ -238,55 +242,7 @@ export class PostsService {
   }
 
   // ========== ORCHESTRATION METHODS ==========
-
-  /**
-   * Main publish execution orchestrator
-   */
-  async executePublish(
-    organizationId: string,
-    postId: string,
-  ): Promise<PostingResult> {
-    const post = await this.getPostWithAccount(organizationId, postId);
-
-    try {
-      // Update status to publishing
-      await this.prisma.post.update({
-        where: { id: postId },
-        data: {
-          status: PostStatus.PUBLISHING,
-          queueStatus: 'PROCESSING',
-        },
-      });
-
-      // Call platform publishing service
-      const result = await this.postPublishingService.publishToPlatform(
-        post.organizationId,
-        {
-          platform: post.socialAccount.platform as Platform,
-          accountId: post.socialAccount.id,
-          content: post.content,
-          mediaFileIds: post.mediaFileIds,
-          options: (post.metadata as PostMetadata)?.options,
-        },
-      );
-
-      // Handle result
-      if (result.success) {
-        await this.markPostAsPublished(postId, result.platformPostId);
-        return result;
-      } else {
-        await this.markPostAsFailed(postId, result.error);
-        return result;
-      }
-    } catch (error) {
-      this.logger.error(`Publish failed for post ${postId}:`, error.stack);
-      await this.markPostAsFailed(postId, error.message);
-      throw error;
-    }
-  }
-
-  // ========== PRIVATE HELPER METHODS ==========
-
+ 
   /**
    * Validate post creation inputs
    */
@@ -294,17 +250,19 @@ export class PostsService {
     organizationId: string,
     userId: string,
     dto: CreatePostDto,
-    tx: Prisma.TransactionClient,
   ): Promise<void> {
     console.log(
       `Validating post creation for org ${organizationId}, user ${userId}`,
     );
     // Verify social account
-    const socialAccount = await tx.socialAccount.findFirst({
+    const socialAccount = await this.prisma.socialAccount.findFirst({
       where: {
         id: dto.socialAccountId,
         organizationId,
         isActive: true,
+      },
+      include: {
+        pages: true,
       },
     });
 
@@ -321,6 +279,42 @@ export class PostsService {
       throw new BadRequestException(
         `Platform mismatch: expected ${socialAccount.platform}, got ${dto.platform}`,
       );
+    }
+
+    // NEW: Page account validation
+    let pageAccount = null;
+
+    if (dto.pageAccountId) {
+      // This is a PAGE post - validate the page account
+      pageAccount = socialAccount.pages.find(
+        (page) => page.id === dto.pageAccountId,
+      );
+
+      if (!pageAccount) {
+        throw new BadRequestException(
+          'Page not found or not associated with this social account',
+        );
+      }
+
+      // Additional validation for LinkedIn pages
+      if (
+        socialAccount.platform === 'LINKEDIN' &&
+        socialAccount.accountType !== 'PAGE'
+      ) {
+        throw new BadRequestException(
+          'Cannot post to LinkedIn pages using a profile account',
+        );
+      }
+    } else {
+      // This is a PROFILE post - validate account type
+      if (
+        socialAccount.platform === 'LINKEDIN' &&
+        socialAccount.accountType !== 'PROFILE'
+      ) {
+        throw new BadRequestException(
+          'Cannot create profile post using a pages account. Please select a specific page.',
+        );
+      }
     }
 
     /**
@@ -540,16 +534,14 @@ export class PostsService {
     };
   }
 
- async getEngagementByPlatformId(platform: Platform, postId: string) {
-    const { pageAccount, platformPostId } = await this.getPageAccountAndPostId(postId);
-    
+  async getEngagementByPlatformId(platform: Platform, postId: string) {
+    const { pageAccount, platformPostId } =
+      await this.getPageAccountAndPostId(postId);
 
-    const token =  await this.encryptionService.decrypt(pageAccount.accessToken);
-      
-    
+    const token = await this.encryptionService.decrypt(pageAccount.accessToken);
+
     return this.fetchPlatformEngagement(platform, platformPostId, token);
   }
-
 
   private buildFacebookUrl(postId: string): string {
     return `${this.FACEBOOK_API_BASE_URL}/${this.FACEBOOK_API_VERSION}/${encodeURIComponent(postId)}`;
@@ -612,17 +604,23 @@ export class PostsService {
       }
 
       if (!post.socialAccount?.pages?.length) {
-        throw new NotFoundException('No active page account associated with this post');
+        throw new NotFoundException(
+          'No active page account associated with this post',
+        );
       }
 
       const pageAccount = post.socialAccount.pages[0];
-      
+
       if (!pageAccount.accessToken) {
-        throw new InternalServerErrorException('Page account does not have a valid access token');
+        throw new InternalServerErrorException(
+          'Page account does not have a valid access token',
+        );
       }
 
       if (!post.platformPostId) {
-        throw new InternalServerErrorException('Post does not have a platformPostId');
+        throw new InternalServerErrorException(
+          'Post does not have a platformPostId',
+        );
       }
 
       return {
@@ -633,13 +631,17 @@ export class PostsService {
         },
         platformPostId: post.platformPostId,
       };
-
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
       }
-      this.logger.error(`Failed to get page account for post ${postId}:`, error);
-      throw new InternalServerErrorException('Failed to retrieve post information');
+      this.logger.error(
+        `Failed to get page account for post ${postId}:`,
+        error,
+      );
+      throw new InternalServerErrorException(
+        'Failed to retrieve post information',
+      );
     }
   }
 
@@ -679,7 +681,7 @@ export class PostsService {
     };
 
     this.logger.debug(`Fetching Facebook engagement for post: ${postId}`);
-    
+
     try {
       const { data } = await firstValueFrom(
         this.http.get<FacebookApiResponse>(url, {
@@ -687,7 +689,9 @@ export class PostsService {
           timeout: 10000,
         }),
       );
-      this.logger.debug(`Facebook engagement data retrieved for post: ${postId}`);
+      this.logger.debug(
+        `Facebook engagement data retrieved for post: ${postId}`,
+      );
       return {
         platform: Platform.FACEBOOK,
         postId: postId,
@@ -720,8 +724,10 @@ export class PostsService {
           timeout: 10000,
         }),
       );
-      this.logger.debug(`Instagram engagement data retrieved for post: ${postId}`);
-      
+      this.logger.debug(
+        `Instagram engagement data retrieved for post: ${postId}`,
+      );
+
       return {
         platform: Platform.INSTAGRAM,
         postId: postId,
@@ -737,5 +743,4 @@ export class PostsService {
       throw error;
     }
   }
-
 }

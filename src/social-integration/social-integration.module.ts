@@ -1,14 +1,12 @@
 import { Module } from '@nestjs/common';
 import { SocialIntegrationService } from './social-integration.service';
 import { SocialIntegrationController } from './social-integration.controller';
-import { SocialAccountModule } from 'src/social-account/social-account.module';
 import { HttpModule } from '@nestjs/axios';
-import { PlatformServiceFactory } from './platform-service.factory';
-import { LinkedInService } from './platforms/linkedin.service';
-import { XService } from './platforms/x.service';
-import { EncryptionService } from 'src/common/utility/encryption.service';
 import { MetaModule } from './meta/meta.module';
 import { LinkedinModule } from './linkedin/linkedin.module';
+import { TwitterModule } from './twitter/twitter.module';
+import { EncryptionService } from '@/common/utility/encryption.service';
+import { SocialAccountModule } from '@/social-account/social-account.module';
 
 
 @Module({
@@ -17,16 +15,11 @@ import { LinkedinModule } from './linkedin/linkedin.module';
     HttpModule,
     MetaModule,
     LinkedinModule,
+    TwitterModule,
   ],
   controllers: [SocialIntegrationController],
   providers: [
     SocialIntegrationService,
-    PlatformServiceFactory,
-    XService,
-    LinkedInService,
-    PlatformServiceFactory,
-    XService,
-    LinkedInService,
     EncryptionService,
   ],
 })

@@ -12,7 +12,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
 import { CreateNotificationDto } from './dtos/create-notification.dto';
 import { MarkAllReadDto } from './dtos/mark-all-read.dto';
 import { MarkReadDto } from './dtos/mark-read.dto';
-import { NotificationEntity } from '@prisma/client';
+import { NotificationEntity } from '@generated/client';
 
 @ApiTags('Notifications')
 @Controller('notifications')

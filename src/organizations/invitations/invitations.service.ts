@@ -5,9 +5,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
-import { MailService } from 'src/mail/mail.service';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { InviteMemberDto } from './dtos/invite-member.dto';
+import { MailService } from '@/mail/mail.service';
+import { PrismaService } from '@/prisma/prisma.service';
 
 const INVITATION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 

@@ -1,7 +1,6 @@
-// src/ai/dtos/generate-image.dto.ts
 import { IsString, IsOptional, IsEnum, maxLength, MaxLength } from 'class-validator';
-import { Platform } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Platform } from '@generated/enums';
 
 export class GenerateImageDto {
   @ApiProperty({

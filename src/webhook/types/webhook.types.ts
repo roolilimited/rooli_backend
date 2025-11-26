@@ -1,4 +1,5 @@
-import { Platform, WebhookEventType } from "@prisma/client";
+import { Platform, WebhookEventType } from "@generated/enums";
+
 
 
 export interface WebhookEvent {

@@ -1,12 +1,15 @@
 import { Module } from '@nestjs/common';
 import { SocialSchedulerService } from './social-scheduler.service';
-import { EncryptionService } from 'src/common/utility/encryption.service';
 import { HttpModule } from '@nestjs/axios';
 import { FacebookPlatformService } from './platforms/facebook-platform.service';
 import { BullModule } from '@nestjs/bullmq';
 import { SocialSchedulerController } from './social-scheduler.controller';
 import { InstagramPlatformService } from './platforms/instagram-platform.service';
 import { SocialPostProcessor } from './processors/social-post.processor';
+import { PreparePostService } from './prepare-post.service';
+import { EncryptionService } from '@/common/utility/encryption.service';
+import { PostRepository } from './post-repo.service';
+import { QueueService } from './queue.service';
 
 @Module({
   imports: [
@@ -34,6 +37,9 @@ import { SocialPostProcessor } from './processors/social-post.processor';
     FacebookPlatformService,
     InstagramPlatformService,
     EncryptionService,
+    PreparePostService,
+    PostRepository,
+    QueueService
   ],
   exports: [SocialSchedulerService],
 })

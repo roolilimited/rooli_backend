@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsEnum, IsDateString, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
-import { Platform } from '@prisma/client';
+import { Platform } from '@generated/enums';
 
 export class AnalyticsQueryDto {
   @ApiPropertyOptional({ enum: Platform, description: 'Filter by platform' })

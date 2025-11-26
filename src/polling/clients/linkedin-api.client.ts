@@ -4,7 +4,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError, AxiosResponse } from 'axios';
 import { UnauthorizedException } from '@nestjs/common';
-import { TooManyRequestsException } from 'src/common/filters/too-many-requests.exception';
+import { TooManyRequestsException } from '@/common/filters/too-many-requests.exception';
 
 interface LinkedInEngagement {
   id: string;

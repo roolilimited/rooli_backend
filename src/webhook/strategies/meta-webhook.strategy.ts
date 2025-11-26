@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { WebhookEventType } from '@prisma/client';
 import { createHmac } from 'crypto';
 import { ParsedWebhookPayload, WebhookStrategy } from '../types/webhook.types';
+import { WebhookEventType } from '@generated/enums';
 
 @Injectable()
 export class MetaWebhookStrategy implements WebhookStrategy {

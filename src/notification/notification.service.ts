@@ -1,9 +1,10 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { NotificationPriority, NotificationEntity } from '@prisma/client';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateNotificationDto } from './dtos/create-notification.dto';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { PrismaService } from '@/prisma/prisma.service';
+import { NotificationEntity } from '@generated/client';
+import { NotificationPriority } from '@generated/enums';
 @Injectable()
 export class NotificationService {
   constructor(

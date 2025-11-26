@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { MetaService } from './meta.service';
 import { MetaController } from './meta.controller';
-import { EncryptionService } from 'src/common/utility/encryption.service';
-import { SocialAccountModule } from 'src/social-account/social-account.module';
+import { EncryptionService } from '@/common/utility/encryption.service';
+import { SocialAccountModule } from '@/social-account/social-account.module';
+
 
 @Module({
   imports: [SocialAccountModule],

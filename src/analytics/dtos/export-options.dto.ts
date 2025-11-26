@@ -1,5 +1,5 @@
+import { Platform } from '@generated/enums';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Platform } from '@prisma/client';
 import { IsEnum, IsOptional, IsDate } from 'class-validator';
 
 export enum ExportFormat {

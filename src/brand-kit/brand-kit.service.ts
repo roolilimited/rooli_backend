@@ -3,11 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { BrandKit } from '@prisma/client';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { RedisService } from 'src/redis/redis.service';
 import { CreateBrandKitDto } from './dtos/create-brand-kit.dto';
 import { UpdateBrandKitDto } from './dtos/update-brand-kit.dto';
+import { PrismaService } from '@/prisma/prisma.service';
+import { RedisService } from '@/redis/redis.service';
+import { BrandKit } from '@generated/client';
 
 @Injectable()
 export class BrandKitService {

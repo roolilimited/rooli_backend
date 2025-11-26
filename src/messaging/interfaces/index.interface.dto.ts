@@ -1,4 +1,5 @@
-import { Platform } from '@prisma/client';
+import { Platform } from "@generated/enums";
+
 
 export interface ProcessMessageEvent {
   platform: Platform;

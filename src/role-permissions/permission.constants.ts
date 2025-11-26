@@ -1,6 +1,4 @@
-// src/permissions/permission.constants.ts
-
-import { SocialAccountRole } from "@prisma/client";
+import { SocialAccountRole } from "@generated/enums";
 
 // Define all permissions by domain
 export const PERMISSIONS = {

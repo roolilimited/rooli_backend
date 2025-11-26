@@ -4,13 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateOrganizationDto } from './dtos/create-organization.dto';
 import { UpdateOrganizationDto } from './dtos/update-organization.dto';
 import { OrganizationUsageDto } from './dtos/organization-usage.dto';
 import { OrganizationStatsDto } from './dtos/organization-stats.dto';
 import { GetAllOrganizationsDto } from './dtos/get-organiations.dto';
 import { GetOrganizationMediaDto } from './dtos/get-organization-media.dto';
+import { PrismaService } from '@/prisma/prisma.service';
 
 @Injectable()
 export class OrganizationsService {

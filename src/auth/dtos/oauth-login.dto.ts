@@ -1,5 +1,5 @@
+import { AuthProvider } from '@generated/enums';
 import { ApiProperty } from '@nestjs/swagger';
-import { AuthProvider } from '@prisma/client';
 import { IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
 
 export class OAuthLoginDto {

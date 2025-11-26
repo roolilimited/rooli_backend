@@ -1,7 +1,7 @@
-// src/organizations/invitations/dto/invite-member.dto.ts
+
 import { IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
-import { OrganizationRole } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { OrganizationRole } from '@generated/enums';
 
 export class InviteMemberDto {
   @ApiProperty({

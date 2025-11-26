@@ -5,20 +5,15 @@ import {
   BadRequestException,
   ConflictException,
 } from '@nestjs/common';
-import {
-  Platform,
-  ContentType,
-  TemplateCategory,
-  TemplateStatus,
-  Prisma,
-} from '@prisma/client';
-import { AiContentService } from 'src/ai/services/ai-content.service';
-import { BrandKitService } from 'src/brand-kit/brand-kit.service';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateTemplateDto } from './dtos/create-template.dto';
 import { GenerateFromTemplateDto } from './dtos/generate-from-template.dto';
 import { UpdateTemplateDto } from './dtos/update-template.dto';
 import { TemplateContent, TemplateVariable } from './interfaces/index.interface';
+import { AiContentService } from '@/ai/services/ai-content.service';
+import { BrandKitService } from '@/brand-kit/brand-kit.service';
+import { PrismaService } from '@/prisma/prisma.service';
+import { Prisma } from '@generated/client';
+import { Platform, ContentType, TemplateCategory, TemplateStatus } from '@generated/enums';
 
 
 

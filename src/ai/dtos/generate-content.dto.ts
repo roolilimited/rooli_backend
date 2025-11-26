@@ -1,6 +1,6 @@
 import { IsEnum, IsString, IsOptional, IsArray } from 'class-validator';
-import { Platform, ContentType, ToneType } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Platform, ContentType, ToneType } from '@generated/enums';
 
 export class GenerateContentDto {
   @ApiProperty({ enum: Platform, example: Platform.INSTAGRAM })

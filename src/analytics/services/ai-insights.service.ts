@@ -1,7 +1,5 @@
-// src/analytics/services/ai-insights.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
-import { Platform } from '@prisma/client';
 
 export interface AIInsight {
   type: 'performance' | 'recommendation' | 'warning';

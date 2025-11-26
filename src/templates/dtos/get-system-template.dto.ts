@@ -1,7 +1,7 @@
+import { PaginationDto } from '@/common/dtos/pagination.dto';
+import { Platform, TemplateCategory } from '@generated/enums';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Platform, TemplateCategory } from '@prisma/client';
 import { IsOptional, IsEnum, IsBoolean } from 'class-validator';
-import { PaginationDto } from 'src/common/dtos/pagination.dto';
 
 export class GetSystemTemplatesDto extends PaginationDto  {
   @ApiPropertyOptional({

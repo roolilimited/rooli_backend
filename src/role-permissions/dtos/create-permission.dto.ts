@@ -1,7 +1,6 @@
-// src/permission/dto/create-permission.dto.ts
+import { PermissionScope, PermissionResource, PermissionAction } from '@generated/enums';
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
-import { PermissionAction, PermissionResource, PermissionScope } from '@prisma/client';
 
 export class CreatePermissionDto {
   @ApiProperty({ description: 'Unique permission name (e.g. posts:create)' })

@@ -1,4 +1,3 @@
-// src/organizations/dto/create-organization.dto.ts
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsEmail, IsOptional, IsBoolean, IsNotEmpty } from 'class-validator';
 

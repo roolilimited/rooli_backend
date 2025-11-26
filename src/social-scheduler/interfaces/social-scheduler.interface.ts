@@ -1,4 +1,4 @@
-import { Platform } from "@prisma/client";
+import { Platform, PostStatus, ScheduleJobStatus } from "@generated/enums";
 
 export interface SocialPlatform {
   schedulePost(post: ScheduledPost): Promise<PublishingResult>;
@@ -7,27 +7,60 @@ export interface SocialPlatform {
   validateCredentials(accessToken: string): Promise<boolean>;
 }
 
-export interface ScheduledPost {
+export interface BaseScheduledPost {
   id: string;
   content: string;
   mediaUrls: string[];
-  scheduledAt: Date;
-  metadata?: any;
+  scheduledAt: string;
+  timezone?: string;
 }
 
-export interface PublishingResult {
+export interface MetaScheduledPost extends BaseScheduledPost {
+  platform: Platform;
+  accessToken: string;
+  pageId?: string;
+  pageAccountId?: string;
+  platformAccountId?: string;
+  instagramBusinessId?: string;
+  containerId?: string;
+  contentType?: string;
+  metadata: any;
+}
+
+export type ScheduledPost =
+  | MetaScheduledPost
+  | TwitterScheduledPost
+  | LinkedInScheduledPost;
+
+export interface TwitterScheduledPost extends BaseScheduledPost {
+  platform: Platform;
+  accessToken: string;
+  accountId: string;
+}
+
+export interface LinkedInScheduledPost extends BaseScheduledPost {
+  platform: Platform;
+  accessToken: string;
+  accountId: string;
+  authorUrn?: string;
+  visibility?: string;
+}
+
+export interface InstagramPublishingResult {
   success: boolean;
   platformPostId?: string;
   publishedAt?: Date;
   error?: string;
-  metadata?: any;
-  context?: string;
+  containerId?: string;
+  childContainerIds?: string[];
+  itemCount?: number;
+  mediaType?: string;
+  containerStatus?: string;
 }
 
 export interface PlatformServiceMap {
-  [key: string]: any; 
+  [key: string]: any;
 }
-
 
 export interface PostMetadata {
   accessToken: string;
@@ -83,13 +116,25 @@ export interface LinkedInPostParams {
   };
 }
 
-export interface JobData {
-  postId: string;
-  platform: Platform;
-  targetPlatform: 'FACEBOOK' | 'INSTAGRAM';
-  containerId?: string;
+export interface ScheduleResult {
+  success: boolean;
+  jobId?: string;
+  error?: string;
 }
 
-export interface ProcessJobData extends JobData {
-  retryCount?: number;
+export interface CancelResult {
+  success: boolean;
+  error?: string;
+  message?: string;
+}
+
+export interface UpdatePostStatus {
+  postId: string;
+  status: PostStatus;
+  queueStatus: ScheduleJobStatus; 
+  metadata?: Record<string, any>;
+}
+
+export interface UpdatePublishPost{
+  publishedAt
 }

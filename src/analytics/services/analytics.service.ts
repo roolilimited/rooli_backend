@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { AnalyticsQueryDto } from '../dtos/analytics-query.dto';
 import { PostAnalyticsSums } from '../analytics.types';
 import { AnalyticsSummary } from '../dtos/analytics-summary.dto';
 import { PlatformPerformance } from '../dtos/platform-performance.dto';
 import { TimeSeriesData } from '../dtos/time-series-data.dto';
+import { PrismaService } from '@/prisma/prisma.service';
 
 @Injectable()
 export class AnalyticsService {

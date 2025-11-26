@@ -2,11 +2,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { Platform } from '@prisma/client';
-import { TooManyRequestsException } from 'src/common/filters/too-many-requests.exception';
-import { RateLimitService } from 'src/rate-limit/rate-limit.service';
 import { LinkedinApiClient } from './clients/linkedin-api.client';
-import { SocialAccountService } from 'src/social-account/social-account.service';
+import { TooManyRequestsException } from '@/common/filters/too-many-requests.exception';
+import { RateLimitService } from '@/rate-limit/rate-limit.service';
+import { SocialAccountService } from '@/social-account/social-account.service';
+import { Platform } from '@generated/enums';
 
 @Injectable()
 export class LinkedinPollingService {
@@ -30,11 +30,11 @@ export class LinkedinPollingService {
     for (const account of linkedinAccounts) {
       try {
         // 2. Check rate limit BEFORE making API call
-        await this.rateLimitService.checkLimit(
-          Platform.LINKEDIN,
-          account.platformAccountId,
-          'get_engagements',
-        );
+        // await this.rateLimitService.checkLimit(
+        //   Platform.LINKEDIN,
+        //   account.platformAccountId,
+        //   'get_engagements',
+        // );
 
         // 3. Get last poll time or default to 2 hours ago
         const lastPolledTime =

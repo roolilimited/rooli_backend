@@ -1,8 +1,8 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ApprovalStatus } from '@prisma/client'; // or your enums path
-import { PaginationDto } from 'src/common/dtos/pagination.dto';
+import { PaginationDto } from '@/common/dtos/pagination.dto';
+import { ApprovalStatus } from '@generated/enums';
 
 export class GetApprovalsFilterDto extends PaginationDto {
   @ApiPropertyOptional({ enum: ApprovalStatus, description: 'Filter by approval status' })

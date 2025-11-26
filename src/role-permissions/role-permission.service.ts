@@ -1,11 +1,7 @@
 ;import { Injectable} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { 
-  Permission, 
-  PermissionScope, 
-  PermissionResource, 
-  PermissionAction,
-} from '@prisma/client';
+import { Permission } from '@generated/client';
+import { PermissionResource, PermissionAction, PermissionScope } from '@generated/enums';
 
 export interface PermissionCheck {
   userId: string;

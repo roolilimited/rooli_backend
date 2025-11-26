@@ -25,7 +25,6 @@ export abstract class BasePlatformService {
     return {
       success: false,
       error: errorMessage,
-      context,
     };
   }
 
@@ -52,13 +51,18 @@ export abstract class BasePlatformService {
     }
   }
 
-  protected validateRequiredFields(post: ScheduledPost, requiredFields: string[]): void {
-    for (const field of requiredFields) {
-      if (!post.metadata[field]) {
-        throw new Error(`Required field '${field}' is missing for ${this.platform}`);
-      }
+  protected validateRequiredFields(
+  post: Record<string, any>,
+  requiredFields: string[],
+): void {
+  for (const field of requiredFields) {
+    if (!post[field]) {
+      throw new Error(
+        `Required field '${field}' is missing for ${this.platform}`,
+      );
     }
   }
+}
 
   protected async executeWithRetry<T>(
     operation: () => Promise<T>,

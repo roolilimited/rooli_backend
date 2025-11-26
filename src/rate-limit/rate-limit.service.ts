@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Platform } from '@prisma/client';
-import { TooManyRequestsException } from 'src/common/filters/too-many-requests.exception';
-import { RedisService } from 'src/redis/redis.service';
-import { PLATFORM_KEY_MAP, PLATFORM_RATE_LIMITS, RateLimitConfig } from './rate-limit.config';
+import { PLATFORM_RATE_LIMITS, RateLimitConfig } from './rate-limit.config';
+import { TooManyRequestsException } from '@/common/filters/too-many-requests.exception';
+import { RedisService } from '@/redis/redis.service';
+import { Platform } from '@generated/enums';
 
 
 
@@ -38,100 +38,100 @@ return {newVal, tonumber(ARGV[1])}
     }
   }
 
-  async checkLimit(
-    platform: Platform,
-    accountId: string,
-    action: string,
-  ): Promise<{ used: number; resetIn: number; remaining: number }> {
-    const limitConfig = this.getLimitConfig(platform, action);
-    const redisKey = this.getRateLimitKey(platform, accountId, action);
+  // async checkLimit(
+  //   platform: Platform,
+  //   accountId: string,
+  //   action: string,
+  // ): Promise<{ used: number; resetIn: number; remaining: number }> {
+  //   const limitConfig = this.getLimitConfig(platform, action);
+  //   const redisKey = this.getRateLimitKey(platform, accountId, action);
 
-    let result: [number, number];
+  //   let result: [number, number];
 
-    if (this.scriptSha) {
-      try {
-        result = await this.redisService.evalsha(
-          this.scriptSha,
-          1,
-          redisKey,
-          limitConfig.window,
-          limitConfig.limit,
-        ) as [number, number];
-      } catch (e: any) {
-        // Only fallback on NOSCRIPT errors
-        if (e?.message?.includes('NOSCRIPT')) {
-          result = await this.redisService.eval(
-            this.luaCheckScript,
-            1,
-            redisKey,
-            limitConfig.window,
-            limitConfig.limit,
-          ) as [number, number];
-        } else {
-          throw e;
-        }
-      }
-    } else {
-      result = await this.redisService.eval(
-        this.luaCheckScript,
-        1,
-        redisKey,
-        limitConfig.window,
-        limitConfig.limit,
-      ) as [number, number];
-    }
+  //   if (this.scriptSha) {
+  //     try {
+  //       result = await this.redisService.evalsha(
+  //         this.scriptSha,
+  //         1,
+  //         redisKey,
+  //         limitConfig.window,
+  //         limitConfig.limit,
+  //       ) as [number, number];
+  //     } catch (e: any) {
+  //       // Only fallback on NOSCRIPT errors
+  //       if (e?.message?.includes('NOSCRIPT')) {
+  //         result = await this.redisService.eval(
+  //           this.luaCheckScript,
+  //           1,
+  //           redisKey,
+  //           limitConfig.window,
+  //           limitConfig.limit,
+  //         ) as [number, number];
+  //       } else {
+  //         throw e;
+  //       }
+  //     }
+  //   } else {
+  //     result = await this.redisService.eval(
+  //       this.luaCheckScript,
+  //       1,
+  //       redisKey,
+  //       limitConfig.window,
+  //       limitConfig.limit,
+  //     ) as [number, number];
+  //   }
 
-    const [usedCount, ttlOrWindow] = result;
+  //   const [usedCount, ttlOrWindow] = result;
 
-    if (usedCount > limitConfig.limit) {
-      throw new TooManyRequestsException(
-        `Rate limit exceeded for ${platform} ${action}. Try again in ${ttlOrWindow}s`,
-      );
-    }
+  //   if (usedCount > limitConfig.limit) {
+  //     throw new TooManyRequestsException(
+  //       `Rate limit exceeded for ${platform} ${action}. Try again in ${ttlOrWindow}s`,
+  //     );
+  //   }
 
-    return {
-      used: usedCount,
-      remaining: Math.max(limitConfig.limit - usedCount, 0),
-      resetIn: ttlOrWindow,
-    };
-  }
+  //   return {
+  //     used: usedCount,
+  //     remaining: Math.max(limitConfig.limit - usedCount, 0),
+  //     resetIn: ttlOrWindow,
+  //   };
+  // }
 
-private getLimitConfig(platform: Platform, action: string): RateLimitConfig {
-  const platformKey = PLATFORM_KEY_MAP[platform];
-  const platformConfig = PLATFORM_RATE_LIMITS[platformKey];
+// private getLimitConfig(platform: Platform, action: string): RateLimitConfig {
+//   const platformKey = PLATFORM_KEY_MAP[platform];
+//   const platformConfig = PLATFORM_RATE_LIMITS[platformKey];
 
-  // Try specific config for that action
-  if (platformConfig?.[action]) {
-    return platformConfig[action];
-  }
+//   // Try specific config for that action
+//   if (platformConfig?.[action]) {
+//     return platformConfig[action];
+//   }
 
-  // Fallback to general default
-  return PLATFORM_RATE_LIMITS.GENERAL.default;
-}
+//   // Fallback to general default
+//   return PLATFORM_RATE_LIMITS.GENERAL.default;
+// }
 
-  async getQuota(
-    platform: Platform,
-    accountId: string,
-    action: string,
-  ): Promise<{ used: number; resetIn: number; remaining: number }> {
-    const limitConfig = this.getLimitConfig(platform, action);
-    const redisKey = this.getRateLimitKey(platform, accountId, action);
+  // async getQuota(
+  //   platform: Platform,
+  //   accountId: string,
+  //   action: string,
+  // ): Promise<{ used: number; resetIn: number; remaining: number }> {
+  //   const limitConfig = this.getLimitConfig(platform, action);
+  //   const redisKey = this.getRateLimitKey(platform, accountId, action);
 
-    const countStr = await this.redisService.get(redisKey);
-    let ttl = await this.redisService.ttl(redisKey);
+  //   const countStr = await this.redisService.get(redisKey);
+  //   let ttl = await this.redisService.ttl(redisKey);
 
-    const used = countStr ? parseInt(countStr, 10) : 0;
+  //   const used = countStr ? parseInt(countStr, 10) : 0;
 
-    if (ttl < 0) {
-      ttl = limitConfig.window;
-    }
+  //   if (ttl < 0) {
+  //     ttl = limitConfig.window;
+  //   }
 
-    return {
-      used,
-      remaining: Math.max(limitConfig.limit - used, 0),
-      resetIn: ttl,
-    };
-  }
+  //   return {
+  //     used,
+  //     remaining: Math.max(limitConfig.limit - used, 0),
+  //     resetIn: ttl,
+  //   };
+  // }
 
    //Helper to generate Redis key
  getRateLimitKey(platform: Platform, accountId: string, action: string): string {

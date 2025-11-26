@@ -5,7 +5,7 @@ import { NotificationsListener } from './listeners/notifications.listener';
 import { ChatGateway } from './chat.gateway';
 import { NotificationGateway } from './notification.gateway';
 import { NotificationAudienceService } from './notification-audience.service';
-import { AuthModule } from 'src/auth/auth.module';
+import { AuthModule } from '@/auth/auth.module';
 
 @Module({
   imports: [AuthModule],

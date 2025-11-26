@@ -1,12 +1,11 @@
-// src/polling/services/x-polling.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bull';
-import { Platform } from '@prisma/client';
-import { TooManyRequestsException } from 'src/common/filters/too-many-requests.exception';
-import { RateLimitService } from 'src/rate-limit/rate-limit.service';
-import { SocialAccountService } from 'src/social-account/social-account.service';
 import { XApiClient } from './clients/x-api.client';
+import { TooManyRequestsException } from '@/common/filters/too-many-requests.exception';
+import { RateLimitService } from '@/rate-limit/rate-limit.service';
+import { SocialAccountService } from '@/social-account/social-account.service';
+import { Platform } from '@generated/enums';
 
 @Injectable()
 export class XPollingService {
@@ -27,11 +26,11 @@ export class XPollingService {
     for (const account of xAccounts) {
       try {
         // Check rate limit for X API
-        await this.rateLimitService.checkLimit(
-          Platform.X,
-          account.platformAccountId,
-          'get_tweet_engagements'
-        );
+        // await this.rateLimitService.checkLimit(
+        //   Platform.X,
+        //   account.platformAccountId,
+        //   'get_tweet_engagements'
+        // );
 
         const lastPolledTime = account.lastSyncAt 
           || new Date(Date.now() - 30 * 60 * 1000); // 30 minutes ago for X

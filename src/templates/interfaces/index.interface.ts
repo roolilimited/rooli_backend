@@ -1,9 +1,3 @@
-import {
-  Platform,
-  ContentType,
-  TemplateCategory,
-  TemplateStatus,
-} from '@prisma/client';
 
 export interface TemplateContent {
   version: number;

@@ -28,7 +28,6 @@ export interface LinkedInCompanyPage {
   vanityName?: string;
   role: string;
   logoUrl?: string;
-  permissions: string[];
 }
 
 export interface ConnectPagesResult {

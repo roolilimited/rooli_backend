@@ -1,7 +1,7 @@
-// src/permission/dto/permission-check.dto.ts
+
+import { PermissionResource, PermissionAction } from '@generated/enums';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
-import { PermissionAction, PermissionResource, PermissionScope } from '@prisma/client';
 
 export class PermissionCheckDto {
   @ApiProperty({ description: 'User ID to check permission for' })

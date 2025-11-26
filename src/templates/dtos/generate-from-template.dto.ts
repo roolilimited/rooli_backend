@@ -1,5 +1,5 @@
+import { Platform } from '@generated/enums';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Platform } from '@prisma/client';
 import {
   IsString,
   IsObject,

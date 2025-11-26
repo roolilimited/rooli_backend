@@ -1,10 +1,10 @@
 // src/analytics/services/export.service.ts
 import { Injectable, Logger } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
-import { PrismaService } from 'src/prisma/prisma.service';
 import PDFDocument from 'pdfkit';
 import ExcelJS from 'exceljs';
 import { ExportFormat, ExportOptionsDto } from '../dtos/export-options.dto';
+import { PrismaService } from '@/prisma/prisma.service';
 
 @Injectable()
 export class ExportService {

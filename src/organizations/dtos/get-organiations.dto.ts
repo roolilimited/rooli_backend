@@ -1,7 +1,7 @@
+import { PaginationDto } from "@/common/dtos/pagination.dto";
+import { PlanTier, PlanStatus } from "@generated/enums";
 import { ApiPropertyOptional } from "@nestjs/swagger";
-import { PlanTier, PlanStatus } from "@prisma/client";
 import { IsOptional, IsString, IsBoolean, IsEnum} from "class-validator";
-import { PaginationDto } from "src/common/dtos/pagination.dto";
 
 export class GetAllOrganizationsDto extends PaginationDto {
   @ApiPropertyOptional({ description: 'Filter by organization name' })

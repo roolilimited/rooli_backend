@@ -1,6 +1,6 @@
 import { IsOptional, IsString, IsInt, Min, IsDate } from 'class-validator';
 import { Type } from 'class-transformer';
-import { Platform, PostStatus } from '@prisma/client';
+import { PostStatus, Platform } from '@generated/enums';
 
 export class GetOrganizationPostsDto {
   @IsOptional()

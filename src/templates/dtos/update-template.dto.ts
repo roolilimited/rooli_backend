@@ -6,13 +6,8 @@ import {
   IsBoolean,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  Platform,
-  ContentType,
-  TemplateCategory,
-  TemplateStatus,
-} from '@prisma/client';
 import { TemplateContent } from '../interfaces/index.interface';
+import { Platform, ContentType, TemplateCategory, TemplateStatus } from '@generated/enums';
 export class UpdateTemplateDto {
   @ApiPropertyOptional({ description: 'New template name' })
   @IsOptional()

@@ -5,14 +5,15 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { Platform, ToneType } from '@prisma/client';
-import { BrandKitService } from 'src/brand-kit/brand-kit.service';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { GenerateContentDto } from '../dtos/generate-content.dto';
 import { OpenAiProvider } from '../providers/openai.service';
 import { AiUsageService } from './ai-usage.service';
-import { RateLimitService } from 'src/rate-limit/rate-limit.service';
 import { HuggingFaceService } from '../providers/huggingface.provider';
+import { BrandKitService } from '@/brand-kit/brand-kit.service';
+import { PrismaService } from '@/prisma/prisma.service';
+import { RateLimitService } from '@/rate-limit/rate-limit.service';
+import { Platform, ToneType } from '@generated/enums';
+
 
 @Injectable()
 export class AiContentService {
@@ -36,11 +37,11 @@ export class AiContentService {
 
     try {
       // 1. Rate limit
-      await this.rateLimitService.checkLimit(
-        'AI',
-        organizationId,
-        'content_generation',
-      );
+      // await this.rateLimitService.checkLimit(
+      //   'AI',
+      //   organizationId,
+      //   'content_generation',
+      // );
 
       // 2. BrandKit
       const brandKit =

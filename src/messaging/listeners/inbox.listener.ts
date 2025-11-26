@@ -1,7 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { OnEvent } from "@nestjs/event-emitter";
 import { MessagingService } from "../messaging.service";
-import { Platform } from "@prisma/client";
+import { Platform } from "@generated/enums";
+
 
 interface MessageReceivedEvent {
   platform: Platform;

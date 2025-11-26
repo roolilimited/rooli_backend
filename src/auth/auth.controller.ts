@@ -17,10 +17,10 @@ import { Login } from './dtos/Login.dto';
 import { Register } from './dtos/Register.dto';
 import { ResetPassword } from './dtos/ResetPassword.dto';
 import { OAuthLoginDto } from './dtos/oauth-login.dto';
-import { AuthProvider, User } from '@prisma/client';
 import { Public } from './decorators/public.decorator';
 import { Response } from 'express';
 import { EAuthProvider } from './enums/provider.enum';
+import { User } from '@generated/client';
 
 @ApiTags('Authentication')
 @Controller('auth')

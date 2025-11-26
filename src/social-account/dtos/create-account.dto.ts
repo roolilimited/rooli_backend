@@ -1,6 +1,6 @@
 import { IsNotEmpty, IsOptional, IsString, IsArray, IsDateString } from 'class-validator';
-import { Platform } from '@prisma/client';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Platform } from '@generated/enums';
 
 export class CreateSocialAccountDto {
   @ApiProperty({ description: 'ID of the organization', example: 'org_123abc' })

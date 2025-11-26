@@ -1,10 +1,10 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../generated/prisma/client" 
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -143,6 +143,8 @@ model Post {
   socialAccountId String
   pageAccountId   String?
   content         String
+  contentType     ContentType  @default(POST)
+  platform        Platform  
   mediaFileIds    String[]
   scheduledAt     String?
   timezone        String
@@ -185,6 +187,26 @@ model Post {
   @@index([status, scheduledAt])
   @@index([socialAccountId, scheduledAt])
   @@index([jobId])
+}
+
+model PostApproval {
+  id            String         @id @default(cuid())
+  postId        String
+  requesterId   String
+  approverId    String?
+  status        ApprovalStatus @default(PENDING)
+  comments      String?
+  requestedAt   DateTime       @default(now())
+  reviewedAt    DateTime?
+  revisionNotes String?        @db.Text
+
+  post      Post  @relation(fields: [postId], references: [id], onDelete: Cascade)
+  requester User  @relation("ApprovalRequester", fields: [requesterId], references: [id])
+  approver  User? @relation("ApprovalApprover", fields: [approverId], references: [id])
+
+  @@unique([postId])
+  @@index([status, requestedAt])
+  @@index([requesterId, status])
 }
 
 model PublishingMetric {
@@ -655,26 +677,6 @@ model PostingSchedule {
   @@index([isActive, platform])
 }
 
-model PostApproval {
-  id            String         @id @default(cuid())
-  postId        String
-  requesterId   String
-  approverId    String?
-  status        ApprovalStatus @default(PENDING)
-  comments      String?
-  requestedAt   DateTime       @default(now())
-  reviewedAt    DateTime?
-  revisionNotes String?        @db.Text
-
-  post      Post  @relation(fields: [postId], references: [id], onDelete: Cascade)
-  requester User  @relation("ApprovalRequester", fields: [requesterId], references: [id])
-  approver  User? @relation("ApprovalApprover", fields: [approverId], references: [id])
-
-  @@unique([postId])
-  @@index([status, requestedAt])
-  @@index([requesterId, status])
-}
-
 model NotificationEntity {
   id              String               @id @default(cuid())
   userId          String
@@ -1062,9 +1064,6 @@ enum Platform {
   LINKEDIN
   FACEBOOK
   INSTAGRAM
-  AI
-  API
-  GENERAL
 }
 
 enum ScheduleJobStatus {

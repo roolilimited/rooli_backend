@@ -3,8 +3,9 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { BasePlatformService } from './base-platform.service';
 import {
-  ScheduledPost,
   PublishingResult,
+  MetaScheduledPost,
+  InstagramPublishingResult,
 } from '../interfaces/social-scheduler.interface';
 
 @Injectable()
@@ -20,15 +21,13 @@ export class InstagramPlatformService extends BasePlatformService {
     super(http);
   }
 
-  async schedulePost(post: ScheduledPost): Promise<PublishingResult> {
-    const context = { postId: post.id, operation: 'schedule' };
-    
+  async schedulePost(post: MetaScheduledPost): Promise<InstagramPublishingResult> {
     try {
       this.validateRequiredFields(post, ['accessToken', 'instagramBusinessId']);
 
-      const { accessToken, instagramBusinessId, contentType } = post.metadata;
+      const { accessToken, instagramBusinessId, contentType } = post;
 
-      this.logger.log('Creating Instagram containers', context);
+      this.logger.log('Creating Instagram containers');
 
       const isReel = this.isReelContent(contentType);
 
@@ -53,23 +52,33 @@ export class InstagramPlatformService extends BasePlatformService {
         accessToken,
       );
     } catch (error) {
-      this.logger.error('Schedule failed', { ...context, error: error.message });
-      return this.handleError(error, 'Instagram schedule', context);
+      this.logger.error('Schedule failed', {
+        error: error.message,
+      });
+      throw error;
     }
   }
 
-  async publishImmediately(post: ScheduledPost): Promise<PublishingResult> {
+  async publishImmediately(post: MetaScheduledPost): Promise<InstagramPublishingResult> {
     const context = { postId: post.id, operation: 'publish_immediate' };
 
     try {
       this.validateRequiredFields(post, ['accessToken', 'instagramBusinessId']);
 
-      const { accessToken, instagramBusinessId, containerId, contentType } = post.metadata;
+      const { accessToken, instagramBusinessId, containerId, contentType } =
+        post;
 
       // Publish existing container
       if (containerId) {
-        this.logger.log('Publishing pre-created container', { ...context, containerId });
-        return await this.publishContainer(instagramBusinessId, containerId, accessToken);
+        this.logger.log('Publishing pre-created container', {
+          ...context,
+          containerId,
+        });
+        return await this.publishContainer(
+          instagramBusinessId,
+          containerId,
+          accessToken,
+        );
       }
 
       // Create and publish (no existing container)
@@ -78,26 +87,37 @@ export class InstagramPlatformService extends BasePlatformService {
       const isReel = this.isReelContent(contentType);
 
       if (isReel) {
-        return await this.createAndPublishReel(post, instagramBusinessId, accessToken);
+        return await this.createAndPublishReel(
+          post,
+          instagramBusinessId,
+          accessToken,
+        );
       }
 
       this.validateMediaUrls(post.mediaUrls);
 
       // Create container
-      const containerResult = await this.createContainers(post, instagramBusinessId, accessToken);
-      
-      if (!containerResult.success || !containerResult.metadata?.containerId) {
+      const containerResult = await this.createContainers(
+        post,
+        instagramBusinessId,
+        accessToken,
+      );
+
+      if (!containerResult.success || !containerResult.containerId) {
         throw new Error(containerResult.error || 'Container creation failed');
       }
 
       // Publish it
       return await this.publishContainer(
         instagramBusinessId,
-        containerResult.metadata.containerId,
-        accessToken
+        containerResult.containerId,
+        accessToken,
       );
     } catch (error) {
-      this.logger.error('Immediate publish failed', { ...context, error: error.message });
+      this.logger.error('Immediate publish failed', {
+        ...context,
+        error: error.message,
+      });
       return this.handleError(error, 'Instagram publish', context);
     }
   }
@@ -109,10 +129,10 @@ export class InstagramPlatformService extends BasePlatformService {
     igAccountId: string,
     containerId: string,
     accessToken: string,
-    retryCount: number = 0
+    retryCount: number = 0,
   ): Promise<PublishingResult> {
     const context = { igAccountId, containerId, retryCount };
-    
+
     try {
       this.logger.log('Publishing container', context);
 
@@ -124,36 +144,45 @@ export class InstagramPlatformService extends BasePlatformService {
         return {
           success: true,
           platformPostId: containerId,
-          metadata: { containerId, alreadyPublished: true }
+          metadata: { containerId, alreadyPublished: true },
         };
       }
 
       if (!state.ready) {
-        this.logger.warn('Container not ready', { ...context, status: state.status });
-        
+        this.logger.warn('Container not ready', {
+          ...context,
+          status: state.status,
+        });
+
         // Retry with exponential backoff (max 3 retries)
         if (retryCount < 3) {
           const delay = Math.min(2000 * Math.pow(2, retryCount), 8000);
           await this.sleep(delay);
-          return await this.publishContainer(igAccountId, containerId, accessToken, retryCount + 1);
+          return await this.publishContainer(
+            igAccountId,
+            containerId,
+            accessToken,
+            retryCount + 1,
+          );
         }
 
         return {
           success: false,
           error: `Media processing incomplete: ${state.status}`,
-          metadata: { containerId, status: state.status, shouldRetry: true }
+          metadata: { containerId, status: state.status, shouldRetry: true },
         };
       }
 
       // Publish
       const endpoint = `${this.GRAPH_API_URL}/${igAccountId}/media_publish`;
       const response = await this.makeApiRequest(
-        () => firstValueFrom(
-          this.http.post(endpoint, null, {
-            params: { access_token: accessToken, creation_id: containerId }
-          })
-        ),
-        'publish Instagram media'
+        () =>
+          firstValueFrom(
+            this.http.post(endpoint, null, {
+              params: { access_token: accessToken, creation_id: containerId },
+            }),
+          ),
+        'publish Instagram media',
       );
 
       const publishedId = response.data.id;
@@ -162,17 +191,20 @@ export class InstagramPlatformService extends BasePlatformService {
       return {
         success: true,
         platformPostId: publishedId,
-        metadata: { containerId, publishedMediaId: publishedId }
       };
-
     } catch (error) {
       this.logger.error('Publish failed', { ...context, error: error.message });
-      
+
       // Check if it's a transient error worth retrying
       if (this.isRetryableError(error) && retryCount < 2) {
         const delay = 3000 * (retryCount + 1);
         await this.sleep(delay);
-        return await this.publishContainer(igAccountId, containerId, accessToken, retryCount + 1);
+        return await this.publishContainer(
+          igAccountId,
+          containerId,
+          accessToken,
+          retryCount + 1,
+        );
       }
 
       throw error;
@@ -183,16 +215,16 @@ export class InstagramPlatformService extends BasePlatformService {
    * Unified container creation logic
    */
   private async createContainers(
-    post: ScheduledPost,
+    post: MetaScheduledPost,
     igAccountId: string,
-    accessToken: string
-  ): Promise<PublishingResult> {
+    accessToken: string,
+  ): Promise<InstagramPublishingResult> {
     if (post.mediaUrls.length === 1) {
       return await this.createSingleMediaContainer(
         post,
         igAccountId,
         accessToken,
-        post.metadata.contentType
+        post.contentType,
       );
     }
 
@@ -200,17 +232,17 @@ export class InstagramPlatformService extends BasePlatformService {
   }
 
   private async createSingleMediaContainer(
-    post: ScheduledPost,
+    post: MetaScheduledPost,
     igAccountId: string,
     accessToken: string,
     contentType?: string,
-  ): Promise<PublishingResult> {
+  ) {
     const mediaUrl = post.mediaUrls[0];
     const isVideo = await this.detectMediaType(mediaUrl, contentType);
 
-    this.logger.log('Creating single media container', { 
-      postId: post.id, 
-      mediaType: isVideo ? 'VIDEO' : 'IMAGE' 
+    this.logger.log('Creating single media container', {
+      postId: post.id,
+      mediaType: isVideo ? 'VIDEO' : 'IMAGE',
     });
 
     const containerId = await this.createMediaContainer(
@@ -228,22 +260,20 @@ export class InstagramPlatformService extends BasePlatformService {
     return {
       success: true,
       platformPostId: null,
-      metadata: {
-        containerId,
-        mediaType: isVideo ? 'VIDEO' : 'IMAGE',
-        containerStatus: 'READY',
-      },
+      containerId,
+      mediaType: isVideo ? 'VIDEO' : 'IMAGE',
+      containerStatus: 'READY',
     };
   }
 
   private async createCarouselContainers(
-    post: ScheduledPost,
+    post: MetaScheduledPost,
     igAccountId: string,
     accessToken: string,
-  ): Promise<PublishingResult> {
-    this.logger.log('Creating carousel', { 
-      postId: post.id, 
-      itemCount: post.mediaUrls.length 
+  ) {
+    this.logger.log('Creating carousel', {
+      postId: post.id,
+      itemCount: post.mediaUrls.length,
     });
 
     // Create all child containers in parallel
@@ -261,12 +291,15 @@ export class InstagramPlatformService extends BasePlatformService {
     try {
       childContainerIds = await Promise.all(childPromises);
     } catch (error) {
-      this.logger.error('Failed creating carousel items', { 
-        postId: post.id, 
-        error: error.message 
+      this.logger.error('Failed creating carousel items', {
+        postId: post.id,
+        error: error.message,
       });
       // Attempt cleanup of any created containers
-      await this.cleanupContainers(childContainerIds?.filter(Boolean) || [], accessToken);
+      await this.cleanupContainers(
+        childContainerIds?.filter(Boolean) || [],
+        accessToken,
+      );
       throw error;
     }
 
@@ -281,29 +314,27 @@ export class InstagramPlatformService extends BasePlatformService {
       accessToken,
     );
 
-    this.logger.log('Carousel created', { 
-      postId: post.id, 
-      containerId: carouselContainerId 
+    this.logger.log('Carousel created', {
+      postId: post.id,
+      containerId: carouselContainerId,
     });
 
     return {
       success: true,
       platformPostId: null,
-      metadata: {
-        containerId: carouselContainerId,
-        childContainerIds,
-        itemCount: post.mediaUrls.length,
-        mediaType: 'CAROUSEL_ALBUM',
-        containerStatus: 'READY',
-      },
+      containerId: carouselContainerId,
+      childContainerIds,
+      itemCount: post.mediaUrls.length,
+      mediaType: 'CAROUSEL_ALBUM',
+      containerStatus: 'READY',
     };
   }
 
   private async scheduleReel(
-    post: ScheduledPost,
+    post: MetaScheduledPost,
     igAccountId: string,
     accessToken: string,
-  ): Promise<PublishingResult> {
+  ) {
     if (!post.mediaUrls?.length) {
       throw new Error('Reel requires a video');
     }
@@ -327,29 +358,27 @@ export class InstagramPlatformService extends BasePlatformService {
     return {
       success: true,
       platformPostId: null,
-      metadata: {
-        containerId,
-        mediaType: 'REELS',
-        containerStatus: 'READY',
-      },
+      containerId,
+      mediaType: 'REELS',
+      containerStatus: 'READY',
     };
   }
 
   private async createAndPublishReel(
-    post: ScheduledPost,
+    post: MetaScheduledPost,
     igAccountId: string,
     accessToken: string,
   ): Promise<PublishingResult> {
     const reelResult = await this.scheduleReel(post, igAccountId, accessToken);
 
-    if (!reelResult.success || !reelResult.metadata?.containerId) {
+    if (!reelResult.success || !reelResult.containerId) {
       throw new Error('Failed to create Reel container');
     }
 
     return await this.publishContainer(
       igAccountId,
-      reelResult.metadata.containerId,
-      accessToken
+      reelResult.containerId,
+      accessToken,
     );
   }
 
@@ -377,14 +406,13 @@ export class InstagramPlatformService extends BasePlatformService {
     }
 
     const response = await this.makeApiRequest(
-      () => firstValueFrom(
-        this.http.post(
-          `${this.GRAPH_API_URL}/${igAccountId}/media`,
-          null,
-          { params }
-        )
-      ),
-      'create media container'
+      () =>
+        firstValueFrom(
+          this.http.post(`${this.GRAPH_API_URL}/${igAccountId}/media`, null, {
+            params,
+          }),
+        ),
+      'create media container',
     );
 
     return response.data.id;
@@ -409,14 +437,13 @@ export class InstagramPlatformService extends BasePlatformService {
     }
 
     const response = await this.makeApiRequest(
-      () => firstValueFrom(
-        this.http.post(
-          `${this.GRAPH_API_URL}/${igAccountId}/media`,
-          null,
-          { params }
-        )
-      ),
-      'create carousel item container'
+      () =>
+        firstValueFrom(
+          this.http.post(`${this.GRAPH_API_URL}/${igAccountId}/media`, null, {
+            params,
+          }),
+        ),
+      'create carousel item container',
     );
 
     return response.data.id;
@@ -436,14 +463,13 @@ export class InstagramPlatformService extends BasePlatformService {
     };
 
     const response = await this.makeApiRequest(
-      () => firstValueFrom(
-        this.http.post(
-          `${this.GRAPH_API_URL}/${igAccountId}/media`,
-          null,
-          { params }
-        )
-      ),
-      'create carousel container'
+      () =>
+        firstValueFrom(
+          this.http.post(`${this.GRAPH_API_URL}/${igAccountId}/media`, null, {
+            params,
+          }),
+        ),
+      'create carousel container',
     );
 
     return response.data.id;
@@ -481,19 +507,17 @@ export class InstagramPlatformService extends BasePlatformService {
     }
 
     const response = await this.makeApiRequest(
-      () => firstValueFrom(
-        this.http.post(
-          `${this.GRAPH_API_URL}/${igAccountId}/media`,
-          null,
-          { params }
-        )
-      ),
-      'create Reel container'
+      () =>
+        firstValueFrom(
+          this.http.post(`${this.GRAPH_API_URL}/${igAccountId}/media`, null, {
+            params,
+          }),
+        ),
+      'create Reel container',
     );
 
     return response.data.id;
   }
-
 
   // ============================================
   // POLLING & STATUS CHECKS (Will use webhooks when it goes live)
@@ -509,7 +533,7 @@ export class InstagramPlatformService extends BasePlatformService {
     initialDelay: number = this.INITIAL_POLL_DELAY_MS,
   ): Promise<void> {
     let delay = initialDelay;
-    
+
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const status = await this.checkMediaStatus(containerId, accessToken);
 
@@ -569,9 +593,9 @@ export class InstagramPlatformService extends BasePlatformService {
       }
 
       if (pending.size > 0) {
-        this.logger.debug('Waiting for containers', { 
-          pending: pending.size, 
-          attempt 
+        this.logger.debug('Waiting for containers', {
+          pending: pending.size,
+          attempt,
         });
         await this.sleep(delay);
         delay = Math.min(delay * 1.5, this.MAX_POLL_DELAY_MS);
@@ -585,14 +609,14 @@ export class InstagramPlatformService extends BasePlatformService {
 
   private async getContainerState(
     containerId: string,
-    accessToken: string
+    accessToken: string,
   ): Promise<{ ready: boolean; published: boolean; status: string }> {
     const status = await this.checkMediaStatus(containerId, accessToken);
 
     return {
       ready: status === 'FINISHED',
       published: status === 'PUBLISHED',
-      status
+      status,
     };
   }
 
@@ -601,12 +625,13 @@ export class InstagramPlatformService extends BasePlatformService {
     accessToken: string,
   ): Promise<string> {
     const response = await this.makeApiRequest(
-      () => firstValueFrom(
-        this.http.get(`${this.GRAPH_API_URL}/${containerId}`, {
-          params: { access_token: accessToken, fields: 'status_code' }
-        })
-      ),
-      'check media status'
+      () =>
+        firstValueFrom(
+          this.http.get(`${this.GRAPH_API_URL}/${containerId}`, {
+            params: { access_token: accessToken, fields: 'status_code' },
+          }),
+        ),
+      'check media status',
     );
 
     return response.data.status_code || 'IN_PROGRESS';
@@ -616,20 +641,23 @@ export class InstagramPlatformService extends BasePlatformService {
   // HELPERS
   // ============================================
 
-  private async detectMediaType(url: string, explicitType?: string): Promise<boolean> {
+  private async detectMediaType(
+    url: string,
+    explicitType?: string,
+  ): Promise<boolean> {
     if (explicitType === 'VIDEO') return true;
     if (explicitType === 'IMAGE') return false;
 
     // Check extension
     const videoExts = ['.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm'];
-    if (videoExts.some(ext => url.toLowerCase().includes(ext))) {
+    if (videoExts.some((ext) => url.toLowerCase().includes(ext))) {
       return true;
     }
 
     // For cloud storage URLs without extensions, try HEAD request
     try {
       const response = await firstValueFrom(
-        this.http.head(url, { timeout: 3000 })
+        this.http.head(url, { timeout: 3000 }),
       );
       const contentType = response.headers['content-type'] || '';
       return contentType.startsWith('video/');
@@ -660,19 +688,19 @@ export class InstagramPlatformService extends BasePlatformService {
 
   private async cleanupContainers(
     containerIds: string[],
-    accessToken: string
+    accessToken: string,
   ): Promise<void> {
-    const cleanupPromises = containerIds.map(id =>
+    const cleanupPromises = containerIds.map((id) =>
       this.deleteScheduledPost(id, accessToken).catch(() => {
         this.logger.warn('Failed to cleanup container', { containerId: id });
-      })
+      }),
     );
 
     await Promise.allSettled(cleanupPromises);
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   async deleteScheduledPost(
@@ -681,12 +709,13 @@ export class InstagramPlatformService extends BasePlatformService {
   ): Promise<boolean> {
     try {
       await this.makeApiRequest(
-        () => firstValueFrom(
-          this.http.delete(`${this.GRAPH_API_URL}/${containerId}`, {
-            params: { access_token: accessToken }
-          })
-        ),
-        'delete container'
+        () =>
+          firstValueFrom(
+            this.http.delete(`${this.GRAPH_API_URL}/${containerId}`, {
+              params: { access_token: accessToken },
+            }),
+          ),
+        'delete container',
       );
 
       this.logger.log('Container deleted', { containerId });
@@ -697,6 +726,7 @@ export class InstagramPlatformService extends BasePlatformService {
     }
   }
 
+
   async validateCredentials(
     instagramBusinessId: string,
     accessToken: string,
@@ -704,18 +734,20 @@ export class InstagramPlatformService extends BasePlatformService {
     try {
       const response = await firstValueFrom(
         this.http.get(`${this.GRAPH_API_URL}/${instagramBusinessId}`, {
-          params: { access_token: accessToken, fields: 'id,username' }
-        })
+          params: { access_token: accessToken, fields: 'id,username' },
+        }),
       );
 
-      this.logger.log('Credentials validated', { 
+      this.logger.log('Credentials validated', {
         username: response.data.username,
-        id: response.data.id 
+        id: response.data.id,
       });
 
       return true;
     } catch (error) {
-      this.logger.error('Credential validation failed', { error: error.message });
+      this.logger.error('Credential validation failed', {
+        error: error.message,
+      });
       return false;
     }
   }

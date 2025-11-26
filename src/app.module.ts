@@ -14,7 +14,6 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { PermissionsModule } from './role-permissions/permissions.module';
 import { UserModule } from './user/user.module';
 import { ApprovalsModule } from './approvals/approvals.module';
-import { SchedulingModule } from './scheduling/scheduling.module';
 import { BillingModule } from './billing/billing.module';
 import { AiModule } from './ai/ai.module';
 import { MessagingModule } from './messaging/messaging.module';
@@ -25,11 +24,9 @@ import { NotificationModule } from './notification/notification.module';
 import { SocialIntegrationModule } from './social-integration/social-integration.module';
 import { RateLimitModule } from './rate-limit/rate-limit.module';
 import { BrandKitModule } from './brand-kit/brand-kit.module';
-import { PollingModule } from './polling/polling.module';
 import { SocialAccountModule } from './social-account/social-account.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { MetaModule } from './social-integration/meta/meta.module';
-import { PostPublishingModule } from './post-publishing/post-publishing.module';
 import { SocialSchedulerModule } from './social-scheduler/social-scheduler.module';
 import { BullBoardModule } from './common/bull-boad/bull-board.module';
 import { BullModule } from '@nestjs/bullmq';
@@ -105,15 +102,11 @@ import { BullModule } from '@nestjs/bullmq';
 
     BillingModule,
 
-    SchedulingModule,
-
     ApprovalsModule,
 
     UserModule,
 
     PermissionsModule,
-
-    PostPublishingModule,
 
 
     SocialSchedulerModule,

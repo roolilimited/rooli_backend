@@ -1,8 +1,9 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { SocialAccount, Platform } from '@prisma/client';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateSocialAccountDto } from './dtos/create-account.dto';
 import { UpdateSocialAccountDto } from './dtos/update-social-account.dto';
+import { PrismaService } from '@/prisma/prisma.service';
+import { SocialAccount } from '@generated/client';
+import { Platform } from '@generated/enums';
 
 @Injectable()
 export class SocialAccountService {

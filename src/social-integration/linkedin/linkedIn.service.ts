@@ -6,10 +6,8 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { EncryptionService } from 'src/common/utility/encryption.service';
-import { AxiosResponse } from 'node_modules/axios/index.cjs';
 import { firstValueFrom } from 'rxjs';
+import { AxiosResponse } from 'axios';
 import {
   LINKEDIN_CONSTANTS,
   ROLE_PERMISSIONS,
@@ -22,7 +20,9 @@ import {
   ConnectPagesResult,
   SocialAccountMetadata,
 } from './interfaces/index.interface';
-import { Prisma } from '@prisma/client';
+import { EncryptionService } from '@/common/utility/encryption.service';
+import { PrismaService } from '@/prisma/prisma.service';
+import { Prisma } from '@generated/client';
 
 @Injectable()
 export class LinkedInService {
@@ -49,6 +49,8 @@ export class LinkedInService {
       throw new Error('LinkedIn credentials not configured');
     }
   }
+
+  // ==================== OAUTH FLOW ====================
 
   // PROFILE CONNECTION FLOW
   async getProfileAuthUrl(userId: string): Promise<string> {
@@ -115,6 +117,52 @@ export class LinkedInService {
     }
   }
 
+  private async requestTokenRefresh(
+  refreshToken: string,
+): Promise<TokenResponse> {
+  const url = `${LINKEDIN_CONSTANTS.AUTH_URL}/accessToken`;
+  const params = new URLSearchParams({
+    grant_type: 'refresh_token',
+    refresh_token: refreshToken,
+    client_id: this.clientId,
+    client_secret: this.clientSecret,
+  });
+
+  try {
+    const response: AxiosResponse<TokenResponse> = await firstValueFrom(
+      this.httpService.post(url, params.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        timeout: LINKEDIN_CONSTANTS.TOKEN_REQUEST_TIMEOUT_MS,
+      }),
+    );
+
+    const data = response.data;
+
+    if (!data?.access_token) {
+      this.logger.error('LinkedIn refresh response missing access_token', {
+        hasData: !!data,
+      });
+      throw new Error('No access token received during refresh');
+    }
+
+    this.logger.debug('LinkedIn token refreshed successfully', {
+      expiresIn: data.expires_in,
+      hasRefreshToken: !!data.refresh_token,
+    });
+
+    return data;
+  } catch (error) {
+    this.logger.error('LinkedIn token refresh failed', {
+      error: error?.response?.data || error?.message,
+      status: error?.response?.status,
+    });
+    throw new InternalServerErrorException(
+      'Failed to refresh LinkedIn access token',
+    );
+  }
+}
+
+
   private async handleProfileConnection(
     profile: LinkedInProfile,
     tokenData: TokenResponse,
@@ -178,6 +226,7 @@ export class LinkedInService {
     };
   }
 
+  // ==================== PAGE CONNECTION ====================
   async connectSelectedPages(
     socialAccountId: string,
     pageIds: string[],
@@ -293,7 +342,6 @@ export class LinkedInService {
         name: page.name,
         vanityName: page.vanityName,
         role: page.role,
-        permissions: page.permissions,
         connectedAt: new Date().toISOString(),
       },
       parentAccount: {
@@ -328,6 +376,7 @@ export class LinkedInService {
     });
   }
 
+  // ==================== PAGE SYNC ====================
   async syncPages(
     socialAccountId: string,
   ): Promise<{ availablePages: LinkedInCompanyPage[] }> {
@@ -374,6 +423,7 @@ export class LinkedInService {
     return pages;
   }
 
+  // ==================== LINKEDIN API CALLS ====================
   private async exchangeCodeForToken(code: string): Promise<TokenResponse> {
     const url = `${LINKEDIN_CONSTANTS.AUTH_URL}/accessToken`;
     const params = new URLSearchParams({
@@ -487,6 +537,8 @@ export class LinkedInService {
         }),
       );
 
+      console.log(response);
+
       const elements: any[] = response.data?.elements ?? [];
 
       this.logger.debug('Organization ACLs fetched', {
@@ -496,7 +548,7 @@ export class LinkedInService {
       const pages: LinkedInCompanyPage[] = [];
 
       for (const element of elements) {
-        console.log(element)
+        console.log(element);
         try {
           const page = this.parseCompanyPageElement(element);
           if (page) {
@@ -514,6 +566,7 @@ export class LinkedInService {
 
       return pages;
     } catch (error) {
+      console.log(error);
       this.logger.error('Failed to discover administered pages', {
         error: error.response?.data || error.message,
         status: error.response?.status,
@@ -533,6 +586,7 @@ export class LinkedInService {
     }
   }
 
+  // ==================== DATABASE OPERATIONS ====================
   private async upsertSocialAccount(
     profile: LinkedInProfile,
     tokenData: TokenResponse,
@@ -706,6 +760,8 @@ export class LinkedInService {
       });
     }
   }
+
+  // ==================== HELPER METHODS ====================
   private async decryptAndValidateState(
     encryptedState: string,
   ): Promise<LinkedInOAuthState> {
@@ -744,10 +800,6 @@ export class LinkedInService {
       return null;
     }
 
-    if (!LINKEDIN_CONSTANTS.ACCEPTED_ROLES.has(element.role)) {
-      return null;
-    }
-
     const orgObj = element['organization~'];
     const urn: string = element.organization;
 
@@ -756,10 +808,9 @@ export class LinkedInService {
       return null;
     }
 
-    const name = this.extractCompanyName(orgObj);
+    const name = orgObj?.localizedName
     const vanityName = orgObj?.vanityName;
-    const logoUrl = this.extractLogoUrl(orgObj?.logoV2);
-    const permissions = this.getPermissionsFromRole(element.role);
+    const logoUrl = orgObj?.logoV2.original;
 
     return {
       id,
@@ -768,7 +819,6 @@ export class LinkedInService {
       vanityName,
       role: element.role,
       logoUrl,
-      permissions,
     };
   }
 
@@ -776,40 +826,6 @@ export class LinkedInService {
     if (!urn) return null;
     const parts = urn.split(':');
     return parts.length > 0 ? parts[parts.length - 1] : null;
-  }
-
-  private extractCompanyName(orgObj: any): string {
-    if (!orgObj) {
-      return 'Unknown Company';
-    }
-
-    const localizedName = orgObj.localizedName;
-
-    if (typeof localizedName === 'string') {
-      return localizedName;
-    }
-
-    if (this.isValidObject(localizedName)) {
-      const firstValue = Object.values(localizedName)[0];
-      if (typeof firstValue === 'string') {
-        return firstValue;
-      }
-    }
-
-    return orgObj.name || 'Unknown Company';
-  }
-
-  private extractLogoUrl(logoV2: any): string | undefined {
-    console.log(logoV2)
-    try {
-      return logoV2?.['original~']?.elements?.[0]?.identifiers?.[0]?.identifier;
-    } catch {
-      return undefined;
-    }
-  }
-
-  private getPermissionsFromRole(role: string): string[] {
-    return ROLE_PERMISSIONS[role] ?? ['analyze'];
   }
 
   private parseMetadata(metadata: unknown): SocialAccountMetadata {

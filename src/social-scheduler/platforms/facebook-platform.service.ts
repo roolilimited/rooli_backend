@@ -1,12 +1,13 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, Logger } from '@nestjs/common';
-import { ContentType, Platform } from '@prisma/client';
 import { firstValueFrom } from 'rxjs';
 import {
   ScheduledPost,
   PublishingResult,
+  MetaScheduledPost,
 } from '../interfaces/social-scheduler.interface';
 import { BasePlatformService } from './base-platform.service';
+import { Platform, ContentType } from '@generated/enums';
 
 @Injectable()
 export class FacebookPlatformService extends BasePlatformService {
@@ -23,13 +24,13 @@ export class FacebookPlatformService extends BasePlatformService {
   }
 
   /** Schedule a Facebook post */
-  async schedulePost(post: ScheduledPost): Promise<PublishingResult> {
+  async schedulePost(post: MetaScheduledPost): Promise<PublishingResult> {
     return this.makeApiRequest(async () => {
-      const { accessToken, pageId } = post.metadata;
+      const { accessToken, pageId } = post;
       this.validateFacebookPost(post, true);
-      console.log(post)
+      console.log(post);
       // Check content type first, then fall back to media detection
-      const contentType = post.metadata?.contentType as ContentType;
+      const contentType = post.contentType as ContentType;
       console.log('Content type for scheduling:', contentType);
 
       if (contentType === ContentType.REEL) {
@@ -45,18 +46,17 @@ export class FacebookPlatformService extends BasePlatformService {
       if (mediaType === 'photo') {
         return this.schedulePhotoPost(post, accessToken, pageId);
       }
-
     }, 'schedule Facebook post');
   }
 
   /** Publish immediately to Facebook */
-  async publishImmediately(post: ScheduledPost): Promise<PublishingResult> {
+  async publishImmediately(post: MetaScheduledPost): Promise<PublishingResult> {
     return this.makeApiRequest(async () => {
-      const { accessToken, pageId } = post.metadata;
+      const { accessToken, pageId } = post;
       this.validateFacebookPost(post, true);
 
       // Check content type first, then fall back to media detection
-      const contentType = post.metadata?.contentType as ContentType;
+      const contentType = post.contentType as ContentType;
 
       if (contentType === ContentType.REEL) {
         return this.publishReelImmediately(post, accessToken, pageId);
@@ -110,7 +110,6 @@ export class FacebookPlatformService extends BasePlatformService {
     return {
       success: true,
       platformPostId: response.data.id,
-      publishedAt: post.scheduledAt,
       metadata: response.data,
     };
   }
@@ -142,62 +141,51 @@ export class FacebookPlatformService extends BasePlatformService {
     return {
       success: true,
       platformPostId: response.data.id,
-      publishedAt: post.scheduledAt,
       metadata: response.data,
     };
   }
 
   /** Schedule a Facebook Reel */
-  private async scheduleReelPost(
-    post: ScheduledPost,
-    accessToken: string,
-    pageId: string,
-  ): Promise<PublishingResult> {
-    const videoUrl = post.mediaUrls?.[0];
-    if (!videoUrl) throw new Error('Video URL is required for Reel posts');
+private async scheduleReelPost(
+  post: ScheduledPost,
+  accessToken: string,
+  pageId: string,
+): Promise<PublishingResult> {
+  const videoUrl = post.mediaUrls?.[0];
+  if (!videoUrl) throw new Error('Video URL is required for Reel posts');
 
-    // 1. Initialize the upload session
-    const initResponse = await this.initiateReelUpload(pageId, accessToken);
-    const videoId = initResponse.video_id;
+  const { videoId, uploadUrl } = await this.initiateReelUpload(pageId, accessToken);
+  await this.uploadVideoFileFromUrl(uploadUrl, videoUrl, accessToken);
 
+  const utcSeconds = Math.floor(new Date(post.scheduledAt).getTime() / 1000);
 
-  await this.uploadVideoFile(videoId, videoUrl, accessToken);
-
-
-    const uploadUrl = `${this.baseUrl}/${pageId}/video_reels`;
-    const utcSeconds = Math.floor(new Date(post.scheduledAt).getTime() / 1000);
-
-    const params = {
+  const params = {
     upload_phase: 'finish',
     video_id: videoId,
     description: post.content || '',
     video_state: 'SCHEDULED',
-    scheduled_publish_time: utcSeconds, 
+    scheduled_publish_time: utcSeconds,
     access_token: accessToken,
   };
 
+  const finishUrl = `${this.baseUrl}/${pageId}/video_reels`;
 
-    this.logger.log(
-      `Scheduling Facebook Reel for page ${pageId} at ${utcSeconds}`,
-    );
+  this.logger.log(`Scheduling Facebook Reel for page ${pageId} at ${utcSeconds}`);
 
-    const response = await firstValueFrom(
-      this.http.post(uploadUrl, null, {
-        params,
-        timeout: this.uploadTimeout,
-      }),
-    );
-    console.log('Scheduled Reel upload response:', response);
+  const response = await firstValueFrom(
+    this.http.post(finishUrl, null, {
+      params,
+      timeout: this.uploadTimeout,
+    }),
+  );
 
-    this.logger.log(`Scheduled Reel upload response: ${response.data}`);
+  return {
+    success: true,
+    platformPostId: response.data.post_id,
+    metadata: response.data,
+  };
+}
 
-    return {
-      success: true,
-      platformPostId: response.data.post_id,
-      publishedAt: post.scheduledAt,
-      metadata: response.data,
-    };
-  }
 
   /** Publish a Facebook video immediately */
   private async publishVideoImmediately(
@@ -275,28 +263,23 @@ export class FacebookPlatformService extends BasePlatformService {
     accessToken: string,
     pageId: string,
   ): Promise<PublishingResult> {
-      const videoUrl = post.mediaUrls?.[0];
+    const videoUrl = post.mediaUrls?.[0];
     if (!videoUrl) throw new Error('Video URL is required for Reel posts');
 
-    // 1. Initialize the upload session
-    const initResponse = await this.initiateReelUpload(pageId, accessToken);
-    const videoId = initResponse.video_id;
+    const { videoId, uploadUrl } = await this.initiateReelUpload(
+      pageId,
+      accessToken,
+    );
 
-
-  await this.uploadVideoFile(videoId, videoUrl, accessToken);
-
-
-
-    const uploadUrl = `${this.baseUrl}/${pageId}/video_reels`;
+    await this.uploadVideoFileFromUrl(uploadUrl, videoUrl, accessToken);
 
     const params = {
-      upload_phase: 'finish',           
-      video_id: videoId,                             
-      video_state: 'PUBLISHED',    
+      upload_phase: 'finish',
+      video_id: videoId,
+      video_state: 'PUBLISHED',
       description: post.content || '',
       access_token: accessToken,
     };
-
 
     this.logger.log(`Publishing Reel immediately for page ${pageId}`);
 
@@ -316,7 +299,6 @@ export class FacebookPlatformService extends BasePlatformService {
       metadata: response.data,
     };
   }
-
 
   /** Delete a scheduled Facebook post */
   async deleteScheduledPost(
@@ -581,22 +563,18 @@ export class FacebookPlatformService extends BasePlatformService {
 
   /** Validate Facebook post data */
   private validateFacebookPost(
-    post: ScheduledPost,
+    post: MetaScheduledPost,
     requirePageId = false,
   ): void {
     if (!post) {
       throw new Error('Post data is required');
     }
 
-    if (!post.metadata) {
-      throw new Error('Post metadata is required');
-    }
-
-    if (requirePageId && !post.metadata.pageId?.trim()) {
+    if (requirePageId && !post.pageId?.trim()) {
       throw new Error('Page ID is required for Facebook page operations');
     }
 
-    if (!post.metadata.accessToken?.trim()) {
+    if (!post.accessToken?.trim()) {
       throw new Error('Access token is required');
     }
 
@@ -614,7 +592,10 @@ export class FacebookPlatformService extends BasePlatformService {
     }
   }
 
-  private async initiateReelUpload(pageId: string, token: string) {
+  private async initiateReelUpload(
+    pageId: string,
+    token: string,
+  ): Promise<{ videoId: string; uploadUrl: string }> {
     const url = `${this.baseUrl}/${pageId}/video_reels`;
     const params = {
       upload_phase: 'start',
@@ -627,31 +608,46 @@ export class FacebookPlatformService extends BasePlatformService {
         timeout: this.uploadTimeout,
       }),
     );
-    console.log('Reel upload initiation response:', response.data);
 
-    if (!response.data?.video_id) {
-      throw new Error('Reel initialization failed: Missing video_id.');
+    this.logger.log('Reel upload initiation response:', response.data);
+
+    const { video_id, upload_url } = response.data || {};
+
+    if (!video_id || !upload_url) {
+      throw new Error(
+        `Reel initialization failed: missing video_id or upload_url. Response: ${JSON.stringify(
+          response.data,
+        )}`,
+      );
     }
-    return response.data;
+
+    return { videoId: video_id, uploadUrl: upload_url };
   }
 
-    // Add this missing method
-private async uploadVideoFile(videoId: string, videoUrl: string, accessToken: string): Promise<void> {
-  const uploadUrl = `https://rupload.facebook.com/video-upload/v24.0/${videoId}`;
-  
-  
-  const headers = {
-    'Authorization': `OAuth ${accessToken}`,
-    'file_url': videoUrl
-  };
+  // Add this missing method
+  private async uploadVideoFileFromUrl(
+    uploadUrl: string, // use the upload_url from start phase
+    videoUrl: string, // your CDN URL
+    accessToken: string, // page access token
+  ): Promise<void> {
+    const headers: Record<string, string> = {
+      Authorization: `OAuth ${accessToken}`,
+      file_url: videoUrl,
+    };
 
-  const response = await firstValueFrom(
-    this.http.post(uploadUrl, null, { headers })
-  );
-  console.log('Video file upload response:', response.data);
+    const response = await firstValueFrom(
+      this.http.post(uploadUrl, null, {
+        headers,
+        timeout: this.uploadTimeout,
+      }),
+    );
 
-  if (!response.data?.success) {
-    throw new Error('Video file upload failed');
+    this.logger.log('Hosted video file upload response:', response.data);
+
+    if (!response.data?.success) {
+      throw new Error(
+        `Video file upload failed: ${JSON.stringify(response.data)}`,
+      );
+    }
   }
-}
 }

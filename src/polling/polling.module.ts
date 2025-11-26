@@ -3,13 +3,13 @@ import { PollingService } from './polling.service';
 import { PollingController } from './polling.controller';
 import { BullModule } from '@nestjs/bullmq';
 import { ScheduleModule } from '@nestjs/schedule';
-import { RateLimitModule } from 'src/rate-limit/rate-limit.module';
 import { LinkedinPollingService } from './linkedin-polling.service';
 import { XPollingService } from './x-polling.service';
-import { SocialAccountModule } from 'src/social-account/social-account.module';
 import { LinkedinApiClient } from './clients/linkedin-api.client';
 import { XApiClient } from './clients/x-api.client';
 import { HttpModule } from '@nestjs/axios';
+import { RateLimitModule } from '@/rate-limit/rate-limit.module';
+import { SocialAccountModule } from '@/social-account/social-account.module';
 
 
 @Module({

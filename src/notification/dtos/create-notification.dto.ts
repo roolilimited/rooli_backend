@@ -1,5 +1,5 @@
+import { NotificationType, NotificationPriority } from '@generated/enums';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { NotificationType, NotificationPriority } from '@prisma/client';
 import {
   IsString,
   IsEnum,

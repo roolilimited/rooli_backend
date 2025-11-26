@@ -1,4 +1,3 @@
-// src/analytics/controllers/exports.controller.ts
 import { Controller, Get, Query, Param, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { ExportService } from './services/export.service';

@@ -1,21 +1,15 @@
-import { PostPublishingService } from 'src/post-publishing/post-publishing.service';
+import { NotificationService } from '@/notification/notification.service';
+import { PrismaService } from '@/prisma/prisma.service';
+import { SocialSchedulerService } from '@/social-scheduler/social-scheduler.service';
 import {
   Injectable,
   Logger,
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
-import {
-  ApprovalStatus,
-  Platform,
-  Post,
-  PostStatus,
-  Prisma,
-} from '@prisma/client';
-import { NotificationService } from 'src/notification/notification.service';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { GetApprovalsFilterDto } from './dtos/get-approval.dto';
-import { SocialSchedulerService } from 'src/social-scheduler/social-scheduler.service';
+import { Prisma } from '@generated/client';
+import { PostStatus, ApprovalStatus } from '@generated/enums';
 
 export interface PostingResult {
   success: boolean;
@@ -40,16 +34,14 @@ export class ApprovalsService {
     private readonly prisma: PrismaService,
     private readonly notificationsService: NotificationService,
     private readonly schedulingService: SocialSchedulerService,
-    //private readonly postPublishingService: PostPublishingService,
   ) {}
 
   async createApprovalRequest(
     postId: string,
     requesterId: string,
-    tx: Prisma.TransactionClient = this.prisma,
   ) {
     try {
-      const approval = await tx.postApproval.create({
+      const approval = await this.prisma.postApproval.create({
         data: {
           postId,
           requesterId,

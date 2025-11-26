@@ -1,8 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import {  MessageStatus, Platform } from '@prisma/client';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { ProcessMessageEvent } from './interfaces/index.interface.dto';
+import { PrismaService } from '@/prisma/prisma.service';
+import { MessageStatus, Platform } from '@generated/enums';
 
 
 @Injectable()

@@ -8,12 +8,9 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { Register } from './dtos/Register.dto';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
-import { AuthProvider, Prisma, User, UserRole } from '@prisma/client';
-import { MailService } from 'src/mail/mail.service';
 import { Login } from './dtos/Login.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { AuthResponse, SafeUser } from './dtos/AuthResponse.dto';
@@ -23,6 +20,10 @@ import { ResetPassword } from './dtos/ResetPassword.dto';
 import { OAuthProfile } from './interfaces/google-profile.interface';
 import { OAuth2Client } from 'google-auth-library';
 import { EAuthProvider } from './enums/provider.enum';
+import { MailService } from '@/mail/mail.service';
+import { PrismaService } from '@/prisma/prisma.service';
+import { User } from '@generated/client';
+import { UserRole, AuthProvider } from '@generated/enums';
 
 @Injectable()
 export class AuthService {
@@ -50,7 +51,7 @@ export class AuthService {
 
       if (existingUser) {
         if (existingUser.deletedAt) {
-          return this.restoreUser(existingUser.id, password, tx);
+          return this.restoreUser(existingUser.id, password);
         }
         throw new ConflictException('User already exists');
       }
@@ -570,12 +571,11 @@ export class AuthService {
   private async restoreUser(
     userId: string,
     newPassword: string,
-    tx: Prisma.TransactionClient,
   ): Promise<AuthResponse> {
     this.validatePasswordStrength(newPassword);
     const hashedPassword = await this.hashPassword(newPassword);
 
-    const user = await tx.user.update({
+    const user = await this.prisma.user.update({
       where: { id: userId },
       data: {
         password: hashedPassword,

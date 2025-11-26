@@ -2,7 +2,7 @@ import { InjectQueue, Processor } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
 import { Job, Queue } from 'bullmq';
 import { WebhookService } from '../webhook.service';
-import { Platform } from '@prisma/client';
+import { Platform } from '@generated/enums';
 
 @Injectable()
 export class WebhookQueueService {
