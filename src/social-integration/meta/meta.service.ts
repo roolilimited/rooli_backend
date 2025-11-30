@@ -73,7 +73,7 @@ export class MetaService {
       ].join(','),
     });
 
-    return { url: `${base}?${params.toString()}`, state: encryptedState };
+    return { url: `${base}?${params.toString()}` };
   }
 
   async handleOAuthCallback(
@@ -635,6 +635,6 @@ export class MetaService {
   }
 
   private getRedirectUri(): string {
-    return `${process.env.API_URL}/social/meta/auth/callback`;
+    return `${process.env.META_CALLBACK_URL}`;
   }
 }
