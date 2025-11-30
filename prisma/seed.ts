@@ -7,8 +7,19 @@ import {
   Prisma,
 } from '../generated/prisma/client';
 import slugify from 'slugify';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
 
-const prisma = new PrismaClient({} as any);
+const connectionString = process.env.DATABASE_URL!;
+
+// Create the native Postgres pool
+const pool = new Pool({ connectionString });
+
+// Create the Prisma Adapter using that pool
+const adapter = new PrismaPg(pool);
+
+// Instantiate the actual Prisma Client with the adapter
+const prisma = new PrismaClient({ adapter });
 
 /**
  * Types used by the seed data
