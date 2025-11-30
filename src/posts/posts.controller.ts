@@ -155,31 +155,4 @@ export class PostsController {
   ) {
     await this.postsService.deletePost(postId, organizationId);
   }
-
-  
-  @Get(':platform/:postId')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Get engagement metrics by platform and post ID',
-    description: 'Retrieve engagement metrics using platform and post ID in the URL path'
-  })
-  @ApiParam({
-    name: 'platform',
-    enum: Platform,
-    description: 'Social media platform'
-  })
-  @ApiParam({
-    name: 'postId',
-    type: String,
-    description: 'ID of the post on the platform'
-  })
-  async getEngagementByPlatformAndPostId(
-    @Param('platform') platform: Platform,
-    @Param('postId') postId: string,
-  ) {
-    return this.postsService.getEngagementByPlatformId(
-      platform,
-      postId,
-    );
-  }
 }
