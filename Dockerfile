@@ -29,7 +29,7 @@ RUN npm install --legacy-peer-deps
 COPY --link . .
 
 # Generate prisma schema
-RUN npm run prisma:generate
+RUN npx prisma generate
 
 
 # Build application
