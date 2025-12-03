@@ -10,24 +10,20 @@ import Redis from 'ioredis';
     {
       provide: 'REDIS_CLIENT',
       useFactory: () => {
-        const client = new Redis({
+        if (process.env.REDIS_URL) {
+          console.log('🚀 Connecting to Cloud Redis...');
+          return new Redis(process.env.REDIS_URL, {
+             tls: { rejectUnauthorized: false }
+          });
+        }
+
+        console.log('💻 Connecting to Local Redis...');
+        return new Redis({
           host: process.env.REDIS_HOST || 'localhost',
           port: parseInt(process.env.REDIS_PORT || '6379', 10),
-          password: process.env.REDIS_PASSWORD || undefined,
         });
-
-        client.on('connect', () => {
-          console.log('✅ Redis connected successfully');
-        });
-
-        client.on('error', (err) => {
-          console.error('❌ Redis connection error:', err);
-        });
-
-        return client;
       },
     },
-    RedisService,
   ],
   exports: [RedisService, 'REDIS_CLIENT'],
 })
