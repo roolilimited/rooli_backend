@@ -35,9 +35,9 @@ export class PostsService {
   /**
    * Create a new post
    */
-async createPost(organizationId: string, userId: string, dto: CreatePostDto) {
+async createPost(userId: string, dto: CreatePostDto) {
   return this.prisma.$transaction(async (tx) => {
-    await this.validatePostCreation(organizationId, userId, dto);
+    await this.validatePostCreation(userId, dto);
 
     const mediaFileIds = dto.mediaFileIds ?? [];
  
@@ -63,7 +63,7 @@ async createPost(organizationId: string, userId: string, dto: CreatePostDto) {
     // 4. Create post as DRAFT
     const post = await tx.post.create({
       data: {
-        organizationId,
+          ...(dto.organizationId ? { organizationId: dto.organizationId } : {}),
         authorId: userId,
         socialAccountId: dto.socialAccountId,
         pageAccountId: dto.pageAccountId ?? null,
@@ -91,7 +91,6 @@ async createPost(organizationId: string, userId: string, dto: CreatePostDto) {
    */
   async submitForApproval(
     postId: string,
-    organizationId: string,
     userId: string,
   ) {
     return this.prisma.$transaction(async (tx) => {
@@ -99,7 +98,6 @@ async createPost(organizationId: string, userId: string, dto: CreatePostDto) {
       const post = await tx.post.findFirst({
         where: {
           id: postId,
-          organizationId,
           status: PostStatus.DRAFT,
         },
       });
@@ -159,9 +157,9 @@ async createPost(organizationId: string, userId: string, dto: CreatePostDto) {
   /**
    * Delete a post (only drafts and failed posts)
    */
-  async deletePost(postId: string, organizationId: string): Promise<void> {
+  async deletePost(postId: string): Promise<void> {
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, organizationId },
+      where: { id: postId },
       select: { status: true, jobId: true },
     });
 
@@ -191,9 +189,9 @@ async createPost(organizationId: string, userId: string, dto: CreatePostDto) {
   }
 
   /** Get a single post by ID with details */
-  async getPostById(postId: string, organizationId: string) {
+  async getPostById(postId: string) {
     const post = await this.prisma.post.findFirst({
-      where: { id: postId, organizationId },
+      where: { id: postId },
       include: this.getPostIncludes(),
     });
 
@@ -204,12 +202,12 @@ async createPost(organizationId: string, userId: string, dto: CreatePostDto) {
   /**
    * Update a post (only drafts or failed posts)
    */
-async updatePost(postId: string, organizationId: string, dto: UpdatePostDto) {
+async updatePost(postId: string, dto: UpdatePostDto) {
   // fetch post and include media relation so TS knows about it
   const post = await this.prisma.post.findFirst({
-    where: { id: postId, organizationId },
+    where: { id: postId },
     include: {
-      mediaFileIds: { select: { id: true } }, // include relation to access existing media ids
+      mediaFileIds: { select: { id: true } },
     },
   });
 
@@ -238,7 +236,7 @@ async updatePost(postId: string, organizationId: string, dto: UpdatePostDto) {
 
   // validate media files if provided
   if (dto.mediaFileIds?.length) {
-    await this.validateMediaFiles(dto.mediaFileIds, organizationId);
+    await this.validateMediaFiles(dto.mediaFileIds);
   }
 
   // build update payload
@@ -272,18 +270,13 @@ async updatePost(postId: string, organizationId: string, dto: UpdatePostDto) {
    * Validate post creation inputs
    */
   private async validatePostCreation(
-    organizationId: string,
     userId: string,
     dto: CreatePostDto,
   ): Promise<void> {
-    console.log(
-      `Validating post creation for org ${organizationId}, user ${userId}`,
-    );
     // Verify social account
     const socialAccount = await this.prisma.socialAccount.findFirst({
       where: {
         id: dto.socialAccountId,
-        organizationId,
         isActive: true,
       },
       include: {
@@ -345,7 +338,7 @@ async updatePost(postId: string, organizationId: string, dto: UpdatePostDto) {
 
     // Validate media files
     if (dto.mediaFileIds?.length > 0) {
-      await this.validateMediaFiles(dto.mediaFileIds, organizationId);
+      await this.validateMediaFiles(dto.mediaFileIds);
     }
   }
 
@@ -361,12 +354,10 @@ async updatePost(postId: string, organizationId: string, dto: UpdatePostDto) {
    */
 private async validateMediaFiles(
     mediaFileIds: string[],
-    organizationId: string,
   ): Promise<void> {
     const count = await this.prisma.mediaFile.count({
       where: {
         id: { in: mediaFileIds },
-        organizationId: organizationId,
       },
     });
 

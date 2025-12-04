@@ -31,7 +31,7 @@ import { Platform } from '@generated/enums';
 
 @ApiTags('Posts')
 @ApiBearerAuth()
-@Controller(':organizationId/posts')
+@Controller('posts')
 export class PostsController {
   constructor(private readonly postsService: PostsService) {}
 
@@ -50,11 +50,10 @@ export class PostsController {
     description: 'Invalid data or platform mismatch',
   })
   async createPost(
-    @Param('organizationId') organizationId: string,
     @Req() req,
     @Body() dto: CreatePostDto,
   ) {
-    return this.postsService.createPost(organizationId, req.user.id, dto);
+    return this.postsService.createPost(req.user.id, dto);
   }
 
   /**
@@ -69,12 +68,10 @@ export class PostsController {
   @ApiResponse({ status: 200, description: 'Post submitted for approval' })
   async submitForApproval(
     @Req() req,
-    @Param('organizationId') organizationId: string,
     @Param('id') postId: string,
   ) {
     return this.postsService.submitForApproval(
       postId,
-      organizationId,
       req.user.id,
     );
   }
@@ -82,7 +79,7 @@ export class PostsController {
   /**
    * Get all posts (with filters)
    */
-  @Get()
+  @Get(':organizationId')
   @ApiOperation({
     summary: 'Get all organization posts',
     description:
@@ -111,10 +108,9 @@ export class PostsController {
   })
   @ApiResponse({ status: 404, description: 'Post not found' })
   async getPostById(
-    @Param('organizationId') organizationId: string,
     @Param('id') postId: string,
   ) {
-    return this.postsService.getPostById(postId, organizationId);
+    return this.postsService.getPostById(postId);
   }
 
   /**
@@ -130,11 +126,10 @@ export class PostsController {
   @ApiResponse({ status: 400, description: 'Invalid update request' })
   @ApiResponse({ status: 404, description: 'Post not found' })
   async updatePost(
-    @Param('organizationId') organizationId: string,
     @Param('id') postId: string,
     @Body() dto: UpdatePostDto,
   ) {
-    return this.postsService.updatePost(postId, organizationId, dto);
+    return this.postsService.updatePost(postId, dto);
   }
 
   /**
@@ -150,9 +145,8 @@ export class PostsController {
   @ApiResponse({ status: 404, description: 'Post not found' })
   @HttpCode(HttpStatus.NO_CONTENT)
   async deletePost(
-    @Param('organizationId') organizationId: string,
     @Param('id') postId: string,
   ) {
-    await this.postsService.deletePost(postId, organizationId);
+    await this.postsService.deletePost(postId);
   }
 }

@@ -107,7 +107,6 @@ export class TwitterService {
         accessSecret: oauthTokenSecret,
       });
 
-      console.log(tempClient);
 
       const {
         client: userClient,
@@ -270,7 +269,6 @@ export class TwitterService {
         ],
       });
 
-      console.log(response);
 
       return {
         id: response.data.id,

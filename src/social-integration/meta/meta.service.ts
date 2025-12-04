@@ -94,7 +94,6 @@ export class MetaService {
       const debugToken = await this.debugToken(tokenData.access_token);
 
       const userProfile = await this.getUserProfile(tokenData.access_token);
-      console.log('User Profile:', userProfile);
 
       // Get user pages with their access tokens
       const userPages = await this.getUserPages(tokenData.access_token);

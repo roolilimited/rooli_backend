@@ -1,17 +1,16 @@
 import { Platform, ContentType } from '@generated/enums';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-import {
-  IsString,
-  IsOptional,
-  IsArray,
-  IsEnum,
-} from 'class-validator';
+import { IsString, IsOptional, IsArray, IsEnum } from 'class-validator';
 
 export class CreatePostDto {
   @ApiProperty({ description: 'Social account to publish under' })
   @IsString()
   socialAccountId: string;
+
+  @ApiPropertyOptional({ description: 'Social account to publish under' })
+  @IsString()
+  organizationId?: string;
 
   @ApiProperty({ description: 'Page account to publish under' })
   @IsString()

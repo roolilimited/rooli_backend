@@ -201,8 +201,8 @@ model Post {
 
   notifications NotificationEntity[]
 
-  organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@index([socialAccountId, status, scheduledAt])
   @@index([organizationId, status])
