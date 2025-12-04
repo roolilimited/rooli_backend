@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PLATFORM_RATE_LIMITS, RateLimitConfig } from './rate-limit.config';
-import { TooManyRequestsException } from '@/common/filters/too-many-requests.exception';
 import { RedisService } from '@/redis/redis.service';
 import { Platform } from '@generated/enums';
 

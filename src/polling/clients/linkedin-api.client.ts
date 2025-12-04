@@ -1,10 +1,9 @@
 // src/polling/clients/linkedin-api.client.ts
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { HttpException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError, AxiosResponse } from 'axios';
 import { UnauthorizedException } from '@nestjs/common';
-import { TooManyRequestsException } from '@/common/filters/too-many-requests.exception';
 
 interface LinkedInEngagement {
   id: string;
@@ -181,7 +180,7 @@ export class LinkedinApiClient {
         case 403:
           throw new UnauthorizedException('LinkedIn API permissions insufficient');
         case 429:
-          throw new TooManyRequestsException('LinkedIn API rate limit exceeded');
+          throw new HttpException('LinkedIn API rate limit exceeded', 429);
         case 404:
           throw new NotFoundException('LinkedIn resource not found');
         default:

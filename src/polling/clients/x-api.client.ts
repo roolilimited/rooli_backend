@@ -1,10 +1,9 @@
 // src/polling/clients/x-api.client.ts
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError, AxiosResponse } from 'axios';
 import {  UnauthorizedException } from '@nestjs/common';
-import { TooManyRequestsException } from '@/common/filters/too-many-requests.exception';
 
 interface XEngagement {
   id: string;
@@ -256,7 +255,7 @@ export class XApiClient {
         case 403:
           throw new UnauthorizedException('X API permissions insufficient');
         case 429:
-          throw new TooManyRequestsException('X API rate limit exceeded');
+          throw new HttpException('X API rate limit exceeded', 429);
         default:
           throw new Error(`X API error: ${message}`);
       }

@@ -1,9 +1,8 @@
 // src/polling/services/linkedin-polling.service.ts
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { LinkedinApiClient } from './clients/linkedin-api.client';
-import { TooManyRequestsException } from '@/common/filters/too-many-requests.exception';
 import { RateLimitService } from '@/rate-limit/rate-limit.service';
 import { SocialAccountService } from '@/social-account/social-account.service';
 import { Platform } from '@generated/enums';
@@ -65,11 +64,11 @@ export class LinkedinPollingService {
         // 6. Update last polled time
         await this.socialAccountService.updateLastPolledTime(account.id);
       } catch (error) {
-        if (error instanceof TooManyRequestsException) {
+        if (error.status === 429) {
           this.logger.warn(
             `Rate limit exceeded for LinkedIn account ${account.id}. Skipping.`,
           );
-          break; // Stop polling all accounts if we hit rate limit
+         throw new HttpException("Rate limit exceeded", 429) // Stop polling all accounts if we hit rate limit
         }
 
         this.logger.error(

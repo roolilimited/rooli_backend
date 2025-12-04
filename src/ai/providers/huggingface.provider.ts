@@ -1,7 +1,12 @@
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+   HttpException
 } from '@nestjs/common';
 import OpenAI from 'openai';
 import { HuggingFaceClient } from '../interfaces/index.interface';
@@ -17,7 +22,7 @@ export class HuggingFaceService implements HuggingFaceClient {
     const apiKey = process.env.HF_API_TOKEN || process.env.HF_TOKEN;
 
     if (!apiKey) {
-      throw new Error(
+      throw new NotFoundException(
         'Hugging Face API token not found in environment variables.',
       );
     }
@@ -73,11 +78,11 @@ export class HuggingFaceService implements HuggingFaceClient {
 
       // More specific error handling
       if (error.code === 'invalid_api_key') {
-        throw new Error('Invalid Hugging Face API token');
+        throw new UnauthorizedException('Invalid Hugging Face API token');
       } else if (error.status === 404) {
-        throw new Error(`Model ${this.textModel} not found or not accessible`);
+        throw new NotFoundException(`Model ${this.textModel} not found or not accessible`);
       } else if (error.status === 429) {
-        throw new Error('Rate limit exceeded for Hugging Face Router API');
+        throw new HttpException('Rate limit exceeded for Hugging Face Router API', 429);
       }
 
       throw error;
@@ -107,13 +112,13 @@ export class HuggingFaceService implements HuggingFaceClient {
 
       if (!response.ok) {
         const text = await response.text();
-        throw new Error(`HF image generation failed: ${text}`);
+        throw new ServiceUnavailableException(`HF image generation failed: ${text}`);
       }
 
       const result = await response.json();
       const imageBase64 = result.data?.[0]?.b64_json;
 
-      if (!imageBase64) throw new Error('No image data returned');
+      if (!imageBase64) throw new BadRequestException('No image data returned');
 
       return {
         imageUrl: `data:image/png;base64,${imageBase64}`,

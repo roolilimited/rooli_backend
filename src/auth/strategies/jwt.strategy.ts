@@ -37,7 +37,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         refreshTokenVersion: true,
       },
     });
-
     // Check if account is locked
     if (user.lockedUntil && user.lockedUntil > new Date()) {
       throw new ForbiddenException('Account is locked');

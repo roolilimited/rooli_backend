@@ -1,8 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bull';
 import { XApiClient } from './clients/x-api.client';
-import { TooManyRequestsException } from '@/common/filters/too-many-requests.exception';
 import { RateLimitService } from '@/rate-limit/rate-limit.service';
 import { SocialAccountService } from '@/social-account/social-account.service';
 import { Platform } from '@generated/enums';
@@ -55,9 +54,9 @@ export class XPollingService {
         await this.socialAccountService.updateLastPolledTime(account.id);
 
       } catch (error) {
-        if (error instanceof TooManyRequestsException) {
+        if (error.status === 429) {
           this.logger.warn(`Rate limit exceeded for X account ${account.id}. Skipping.`);
-          break;
+          throw new HttpException("Rate limit exceeded", 429)
         }
         
         this.logger.error(`Failed to poll X account ${account.id}:`, error.stack);

@@ -47,7 +47,7 @@ export class OrganizationsService {
         });
 
         if (!ownerRole) {
-          throw new Error(
+          throw new NotFoundException(
             "Role 'owner' does not exist. Seed your roles table first.",
           );
         }
