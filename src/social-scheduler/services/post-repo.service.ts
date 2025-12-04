@@ -15,8 +15,14 @@ export class PostRepository {
     const post = await this.prisma.post.findFirst({
       where,
       include: {
+        pageAccount: true,
         socialAccount: {
           include: { pages: true },
+        },
+        mediaFileIds: {
+          select: {
+            url: true
+          }
         },
         childPosts: { 
            orderBy: { createdAt: 'asc' }, // Ensure thread order

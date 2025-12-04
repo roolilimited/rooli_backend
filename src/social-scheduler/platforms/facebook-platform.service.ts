@@ -65,6 +65,7 @@ export class FacebookPlatformService extends BasePlatformService {
     isScheduled: boolean,
   ) {
     const attachedMedia = [];
+    console.log(post, pageId)
 
     // 1. Upload ALL media (Photos AND Videos) as unpublished staging assets
     if (post.mediaUrls?.length) {
@@ -107,6 +108,7 @@ export class FacebookPlatformService extends BasePlatformService {
     const response = await firstValueFrom(
       this.http.post(`${this.baseUrl}/${pageId}/feed`, null, { params }),
     );
+    console.log(response)
 
     return {
       success: true,

@@ -48,6 +48,7 @@ import { AccessControlModule } from './access-control/access-control.module';
                 rejectUnauthorized: false, // Essential for Upstash/Render
               },
             },
+            skipConfigValidation: true,
           };
         }
 

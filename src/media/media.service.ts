@@ -56,7 +56,6 @@ export class MediaService {
       `data:${file.mimetype};base64,${file.buffer.toString('base64')}`,
       {
         resource_type: file.mimetype.startsWith('video/') ? 'video' : 'image',
-        folder: `org_${organizationId}`,
       },
     );
 
@@ -101,7 +100,6 @@ export class MediaService {
             resource_type: file.mimetype.startsWith('video/')
               ? 'video'
               : 'image',
-            folder: `org_${organizationId}`,
           },
         ),
       ),

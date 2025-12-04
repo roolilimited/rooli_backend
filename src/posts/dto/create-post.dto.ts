@@ -1,10 +1,11 @@
 import { Platform, ContentType } from '@generated/enums';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
-import { IsString, IsOptional, IsArray, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsArray, IsEnum, IsNotEmpty } from 'class-validator';
 
 export class CreatePostDto {
   @ApiProperty({ description: 'Social account to publish under' })
+  @IsNotEmpty()
   @IsString()
   socialAccountId: string;
 
@@ -14,9 +15,10 @@ export class CreatePostDto {
 
   @ApiProperty({ description: 'Page account to publish under' })
   @IsString()
-  pageAccountId: string;
+  pageAccountId?: string;
 
   @ApiProperty({ description: 'Main content of the post' })
+  @IsNotEmpty()
   @IsString()
   content: string;
 

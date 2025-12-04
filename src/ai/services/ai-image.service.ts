@@ -55,7 +55,6 @@ export class AiImageService {
 
       // 4️⃣ Upload to Cloudinary
       const uploaded = await cloudinary.uploader.upload(result.imageUrl, {
-        folder: `org_${organizationId}`,
         resource_type: 'image',
         public_id: `${generationId}`,
       });

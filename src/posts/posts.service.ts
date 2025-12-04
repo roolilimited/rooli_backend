@@ -9,7 +9,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { PostFilterDto } from './dto/post-filter.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
-import { parseISO, isBefore } from 'date-fns';
 import { fromZonedTime } from 'date-fns-tz';
 import { HttpService } from '@nestjs/axios';
 import { ApprovalsService } from '@/approvals/approvals.service';
@@ -23,7 +22,6 @@ export class PostsService {
   private readonly logger = new Logger(PostsService.name);
   private readonly MAX_RETRIES = 3;
 
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly approvalsService: ApprovalsService,
@@ -35,64 +33,73 @@ export class PostsService {
   /**
    * Create a new post
    */
-async createPost(userId: string, dto: CreatePostDto) {
-  return this.prisma.$transaction(async (tx) => {
-    await this.validatePostCreation(userId, dto);
+  async createPost(userId: string, dto: CreatePostDto) {
+    try {
+      await this.validatePostCreation(userId, dto);
+      console.log(dto)
 
-    const mediaFileIds = dto.mediaFileIds ?? [];
- 
-    // 2. Determine if this is a profile post or page post
-    const isProfilePost = !dto.pageAccountId;
+      // 2. Determine if this is a profile post or page post
+      const isProfilePost = !dto.pageAccountId;
 
-    let finalScheduledAt: Date | null = null;
+      return this.prisma.$transaction(async (tx) => {
+        const mediaFileIds = dto.mediaFileIds ?? [];
 
-  if (dto.scheduledAt && dto.timezone) {
-     finalScheduledAt = this.calculateUtcTime(dto.scheduledAt, dto.timezone);
-     
-     if (finalScheduledAt <= new Date()) {
-        throw new BadRequestException('Scheduled time must be in the future');
-     }
+        let finalScheduledAt: Date | null = null;
+
+        if (dto.scheduledAt && dto.timezone) {
+          finalScheduledAt = this.calculateUtcTime(
+            dto.scheduledAt,
+            dto.timezone,
+          );
+          if (finalScheduledAt <= new Date()) {
+            throw new BadRequestException(
+              'Scheduled time must be in the future',
+            );
+          }
+        }
+
+        // 3. Build nested connect object for media relation (only when present)
+        const mediaRelation =
+          mediaFileIds.length > 0
+            ? { connect: mediaFileIds.map((id) => ({ id })) }
+            : undefined;
+
+        // 4. Create post as DRAFT
+        const post = await tx.post.create({
+          data: {
+            ...(dto.organizationId
+              ? { organizationId: dto.organizationId }
+              : {}),
+            authorId: userId,
+            socialAccountId: dto.socialAccountId,
+            pageAccountId: dto.pageAccountId ?? null,
+            content: dto.content,
+            ...(mediaRelation ? { mediaFileIds: mediaRelation } : {}),
+            status: PostStatus.DRAFT,
+            timezone: dto.timezone,
+            scheduledAt: finalScheduledAt,
+            platform: dto.platform,
+            metadata: {
+              ...(dto.metadata || {}),
+              postType: isProfilePost ? 'PROFILE' : 'PAGE',
+            } as Prisma.JsonValue,
+          },
+          include: this.getPostIncludes(),
+        });
+
+        this.logger.log(`💾 Post ${post.id} created as draft`);
+
+        return post;
+      });
+    } catch (err) {
+      console.log(err);
+      throw err;
+    }
   }
-
-    // 3. Build nested connect object for media relation (only when present)
-    const mediaRelation =
-      mediaFileIds.length > 0
-        ? { connect: mediaFileIds.map((id) => ({ id })) }
-        : undefined;
-
-    // 4. Create post as DRAFT
-    const post = await tx.post.create({
-      data: {
-          ...(dto.organizationId ? { organizationId: dto.organizationId } : {}),
-        authorId: userId,
-        socialAccountId: dto.socialAccountId,
-        pageAccountId: dto.pageAccountId ?? null,
-        content: dto.content,
-        ...(mediaRelation ? { mediaFileIds: mediaRelation } : {}),
-        status: PostStatus.DRAFT,
-        timezone: dto.timezone,
-        scheduledAt: finalScheduledAt,
-        platform: dto.platform,
-        metadata: {
-          ...(dto.metadata || {}),
-          postType: isProfilePost ? 'PROFILE' : 'PAGE',
-        } as Prisma.JsonValue,
-      },
-      include: this.getPostIncludes(),
-    });
-
-    this.logger.log(`💾 Post ${post.id} created as draft`);
-
-    return post;
-  });
-}
   /**
    * Submit a draft post for approval workflow
    */
-  async submitForApproval(
-    postId: string,
-    userId: string,
-  ) {
+  async submitForApproval(postId: string, userId: string) {
     return this.prisma.$transaction(async (tx) => {
       // 1. Validate post
       const post = await tx.post.findFirst({
@@ -202,70 +209,71 @@ async createPost(userId: string, dto: CreatePostDto) {
   /**
    * Update a post (only drafts or failed posts)
    */
-async updatePost(postId: string, dto: UpdatePostDto) {
-  // fetch post and include media relation so TS knows about it
-  const post = await this.prisma.post.findFirst({
-    where: { id: postId },
-    include: {
-      mediaFileIds: { select: { id: true } },
-    },
-  });
+  async updatePost(postId: string, dto: UpdatePostDto) {
+    // fetch post and include media relation so TS knows about it
+    const post = await this.prisma.post.findFirst({
+      where: { id: postId },
+      include: {
+        mediaFileIds: { select: { id: true } },
+      },
+    });
 
-  if (!post) throw new NotFoundException('Post not found');
+    if (!post) throw new NotFoundException('Post not found');
 
-  const EDITABLE_STATUSES: PostStatus[] = [
-    PostStatus.DRAFT,
-    PostStatus.FAILED,
-    PostStatus.PENDING_APPROVAL,
-  ];
+    const EDITABLE_STATUSES: PostStatus[] = [
+      PostStatus.DRAFT,
+      PostStatus.FAILED,
+      PostStatus.PENDING_APPROVAL,
+    ];
 
-  if (!EDITABLE_STATUSES.includes(post.status)) {
-    throw new BadRequestException(`Cannot update post with status ${post.status}`);
-  }
-
-  // scheduledAt validation
-  if (dto.scheduledAt) {
-    const scheduled = new Date(dto.scheduledAt);
-    if (isNaN(scheduled.getTime())) {
-      throw new BadRequestException('Invalid scheduledAt date');
+    if (!EDITABLE_STATUSES.includes(post.status)) {
+      throw new BadRequestException(
+        `Cannot update post with status ${post.status}`,
+      );
     }
-    if (scheduled <= new Date()) {
-      throw new BadRequestException('Scheduled time must be in the future');
+
+    // scheduledAt validation
+    if (dto.scheduledAt) {
+      const scheduled = new Date(dto.scheduledAt);
+      if (isNaN(scheduled.getTime())) {
+        throw new BadRequestException('Invalid scheduledAt date');
+      }
+      if (scheduled <= new Date()) {
+        throw new BadRequestException('Scheduled time must be in the future');
+      }
     }
-  }
 
-  // validate media files if provided
-  if (dto.mediaFileIds?.length) {
-    await this.validateMediaFiles(dto.mediaFileIds);
-  }
+    // validate media files if provided
+    if (dto.mediaFileIds?.length) {
+      await this.validateMediaFiles(dto.mediaFileIds);
+    }
 
-  // build update payload
-  const updateData: Prisma.PostUpdateInput = {
-    content: dto.content ?? undefined,
-    scheduledAt: dto.scheduledAt ?? undefined,
-    updatedAt: new Date(), 
-  };
-
-  if (dto.mediaFileIds) {
-    updateData.mediaFileIds = {
-      set: dto.mediaFileIds.map((id) => ({ id })),
+    // build update payload
+    const updateData: Prisma.PostUpdateInput = {
+      content: dto.content ?? undefined,
+      scheduledAt: dto.scheduledAt ?? undefined,
+      updatedAt: new Date(),
     };
+
+    if (dto.mediaFileIds) {
+      updateData.mediaFileIds = {
+        set: dto.mediaFileIds.map((id) => ({ id })),
+      };
+    }
+
+    // perform update and return requested includes
+    const updated = await this.prisma.post.update({
+      where: { id: postId },
+      data: updateData,
+      include: this.getPostIncludes(),
+    });
+
+    this.logger.log(`📝 Post ${postId} updated successfully`);
+    return updated;
   }
-
-  // perform update and return requested includes
-  const updated = await this.prisma.post.update({
-    where: { id: postId },
-    data: updateData,
-    include: this.getPostIncludes(),
-  });
-
-  this.logger.log(`📝 Post ${postId} updated successfully`);
-  return updated;
-}
-
 
   // ========== ORCHESTRATION METHODS ==========
- 
+
   /**
    * Validate post creation inputs
    */
@@ -335,26 +343,27 @@ async updatePost(postId: string, dto: UpdatePostDto) {
       }
     }
 
-
     // Validate media files
     if (dto.mediaFileIds?.length > 0) {
       await this.validateMediaFiles(dto.mediaFileIds);
     }
   }
 
-  private calculateUtcTime(localDateTimeString: string, timezone: string): Date {
-  // This helper converts "9:00 AM in Lagos" to the equivalent Javascript Date object (which is always UTC internally)
-  const utcDate = fromZonedTime(localDateTimeString, timezone);
-  
-  return utcDate;
-}
+  private calculateUtcTime(
+    localDateTimeString: string,
+    timezone: string,
+  ): Date {
+    console.log(localDateTimeString, timezone)
+    // This helper converts "9:00 AM in Lagos" to the equivalent Javascript Date object (which is always UTC internally)
+    const utcDate = fromZonedTime(localDateTimeString, timezone);
+
+    return utcDate;
+  }
 
   /**
    * Validate media files belong to organization
    */
-private async validateMediaFiles(
-    mediaFileIds: string[],
-  ): Promise<void> {
+  private async validateMediaFiles(mediaFileIds: string[]): Promise<void> {
     const count = await this.prisma.mediaFile.count({
       where: {
         id: { in: mediaFileIds },
@@ -367,7 +376,6 @@ private async validateMediaFiles(
       );
     }
   }
-
 
   /**
    * Build WHERE clause for post filtering
@@ -407,6 +415,7 @@ private async validateMediaFiles(
    */
   private getPostIncludes() {
     return {
+      mediaFileIds: true,
       socialAccount: {
         select: {
           id: true,
@@ -437,5 +446,4 @@ private async validateMediaFiles(
       },
     };
   }
-
 }

@@ -26,9 +26,11 @@ export class PreparePostService {
   ) {}
 
   async preparePlatformPost(post: any) {
+    console.log(post)
     try {
+      const mediaIds = post.mediaFileIds?.map((f: any) => f.url) || [];
       const [mediaUrls, decryptedToken] = await Promise.all([
-        this.getMediaFiles(post.mediaFileIds || []),
+        this.getMediaFiles(mediaIds || []),
         this.decryptToken(post.socialAccount.accessToken, 'social account'),
       ]);
 
@@ -125,6 +127,7 @@ export class PreparePostService {
           }
           metaPost.instagramBusinessId = pageAccount.instagramBusinessId;
         }
+        console.log(metaPost)
 
         return metaPost;
       }
