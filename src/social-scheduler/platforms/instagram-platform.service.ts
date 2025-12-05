@@ -14,10 +14,11 @@ export class InstagramPlatformService extends BasePlatformService {
   readonly platform = 'INSTAGRAM';
   private readonly GRAPH_API_URL = 'https://graph.facebook.com/v24.0';
   private readonly MAX_CAROUSEL_ITEMS = 10;
-  private readonly MAX_POLL_ATTEMPTS = 3;
-  private readonly INITIAL_POLL_DELAY_MS = 3000;
-  private readonly MAX_POLL_DELAY_MS = 20000;
-  POLLING_CONFIG: any;
+  private readonly POLLING_CONFIG = {
+  MAX_ATTEMPTS: 20, 
+  DELAY_MS: 3000,
+  BACKOFF_FACTOR: 1.5
+};
 
   constructor(http: HttpService) {
     super(http);
@@ -49,12 +50,7 @@ export class InstagramPlatformService extends BasePlatformService {
     accessToken: string,
   ): Promise<boolean> {
     return this.makeApiRequest(async () => {
-      if (!containerId?.trim()) {
-        throw new Error('Container ID is required for deletion');
-      }
-      if (!accessToken?.trim()) {
-        throw new Error('Access token is required');
-      }
+      if (!containerId || !accessToken) throw new Error('Missing ID or Token');
 
       this.logger.log(`Deleting Instagram Container: ${containerId}`);
 
@@ -69,7 +65,7 @@ export class InstagramPlatformService extends BasePlatformService {
   }
 
   // ===========================================================================
-  // STRATEGIES (Reel, Carousel, Single)
+  // THE ORCHESTRATOR
   // ===========================================================================
 
   private async handlePost(
@@ -80,14 +76,14 @@ export class InstagramPlatformService extends BasePlatformService {
       this.validateMediaUrls(post.mediaUrls);
 
       const { accessToken, instagramBusinessId, contentType } = post;
-      const isReel = contentType === ContentType.REEL;
-      const isCarousel = post.mediaUrls.length > 1;
 
-      if (isReel) {
+      // 1. REELS
+      if (contentType === ContentType.REEL) {
         return await this.handleReel(post, instagramBusinessId, accessToken);
       }
 
-      if (isCarousel) {
+      // 2. CAROUSEL (Mixed Media or Multi-Image)
+      if (post.mediaUrls.length > 1) {
         return await this.handleCarousel(
           post,
           instagramBusinessId,
@@ -95,6 +91,7 @@ export class InstagramPlatformService extends BasePlatformService {
         );
       }
 
+      // 3. SINGLE MEDIA (Default)
       return await this.handleSingleMedia(
         post,
         instagramBusinessId,
@@ -107,109 +104,40 @@ export class InstagramPlatformService extends BasePlatformService {
     }
   }
 
-  /**
-   * Handles Mixed Media Carousels (Photos + Videos together)
-   */
-  private async handleCarousel(
-    post: MetaScheduledPost,
-    igUserId: string,
-    accessToken: string,
-  ): Promise<InstagramPublishingResult> {
-    this.logger.log(
-      `Creating Mixed Media Carousel (${post.mediaUrls.length} items)`,
-    );
+  // ===========================================================================
+  // STRATEGIES
+  // ===========================================================================
 
-    // Create Child Containers (Parallel)
-    // We loop through urls, detect type, and create specific item containers
-    const childPromises = post.mediaUrls.map(async (url) => {
-      const isVideo = await this.detectMediaType(url);
-      return this.createCarouselItem(
-        igUserId,
-        url,
-        accessToken,
-        isVideo,
-        post.metadata,
-      );
-    });
-
-    const childIds = await Promise.all(childPromises);
-
-    // Poll Children (Wait for videos to be ready)
-    await this.pollMultipleContainers(childIds, accessToken);
-
-    //  Create Parent Container
-    const params: any = {
-      access_token: accessToken,
-      media_type: 'CAROUSEL',
-      children: childIds.join(','),
-      caption: post.content || '',
-    };
-
-    // Apply Metadata (Location) to the Parent
-    this.applyMetadata(params, post.metadata, false);
-
-    const response = await this.makeApiRequest(
-      () =>
-        firstValueFrom(
-          this.http.post(`${this.GRAPH_API_URL}/${igUserId}/media`, null, {
-            params,
-          }),
-        ),
-      'create carousel parent',
-    );
-
-    return {
-      success: true,
-      containerId: response.data.id,
-      containerStatus: 'READY',
-      mediaType: 'CAROUSEL',
-    };
-  }
-
-  /**
-   * Handles Single Photo or Video
-   */
   private async handleSingleMedia(
     post: MetaScheduledPost,
-    igUserId: string,
-    accessToken: string,
+    igId: string,
+    token: string,
   ): Promise<InstagramPublishingResult> {
     const url = post.mediaUrls[0];
     const isVideo = await this.detectMediaType(url);
 
+    const mediaType = isVideo ? 'REELS' : 'IMAGE';
+
     const params: any = {
-      access_token: accessToken,
+      media_type: mediaType,
       caption: post.content || '',
+      [isVideo ? 'video_url' : 'image_url']: url,
     };
 
-    if (isVideo) {
-      params.media_type = 'VIDEO';
-      params.video_url = url;
-    } else {
-      params.image_url = url;
-      // User Tags only apply to Single Images
-      this.applyMetadata(params, post.metadata, true);
+    if (mediaType === 'REELS') {
+      params.share_to_feed = true;
+      // If you have cover image metadata, add it here:
+      if (post.metadata?.coverUrl) params.cover_url = post.metadata.coverUrl;
     }
 
-    // Location applies to both
-    if (post.metadata?.locationId)
-      params.location_id = post.metadata.locationId;
+    Object.assign(params, this.extractMetadataParams(post.metadata, !isVideo));
 
-    const response = await this.makeApiRequest(
-      () =>
-        firstValueFrom(
-          this.http.post(`${this.GRAPH_API_URL}/${igUserId}/media`, null, {
-            params,
-          }),
-        ),
-      'create single media',
-    );
+    // CREATE CONTAINER
+    const containerId = await this.createIGContainer(igId, token, params);
 
-    const containerId = response.data.id;
-
-    // Videos need polling before they can be published
+    //WAIT FOR PROCESSING (Crucial for Video/Reels)
     if (isVideo) {
-      await this.pollMediaProcessing(containerId, accessToken);
+      await this.pollMediaProcessing(containerId, token);
     }
 
     return {
@@ -220,166 +148,179 @@ export class InstagramPlatformService extends BasePlatformService {
     };
   }
 
-  /**
-   * Handles Reels
-   */
-  private async handleReel(
+ private async handleCarousel(
     post: MetaScheduledPost,
-    igUserId: string,
-    accessToken: string,
+    igId: string,
+    token: string,
   ): Promise<InstagramPublishingResult> {
-    if (post.mediaUrls.length !== 1)
-      throw new Error('Reels support exactly one video.');
+    this.logger.log(`Creating Carousel (${post.mediaUrls.length} items)`);
 
-    const params: any = {
-      access_token: accessToken,
-      media_type: 'REELS',
-      video_url: post.mediaUrls[0],
-      caption: post.content || '',
-      share_to_feed: post.metadata?.shareToFeed ?? true,
-    };
+    // 1. Create Children
+    const childPromises = post.mediaUrls.map(async (url) => {
+      const isVideo = await this.detectMediaType(url);
+      return this.createIGContainer(igId, token, {
+        is_carousel_item: true,
+        media_type: isVideo ? 'VIDEO' : 'IMAGE',
+        [isVideo ? 'video_url' : 'image_url']: url,
+      });
+    });
 
-    // Apply Reel-specific metadata
-    if (post.metadata?.audioName) params.audio_name = post.metadata.audioName;
-    if (post.metadata?.locationId)
-      params.location_id = post.metadata.locationId;
-    if (post.metadata?.coverUrl) params.cover_url = post.metadata.coverUrl; // Custom cover
+    const childIds = await Promise.all(childPromises);
 
-    const response = await this.makeApiRequest(
-      () =>
-        firstValueFrom(
-          this.http.post(`${this.GRAPH_API_URL}/${igUserId}/media`, null, {
-            params,
-          }),
-        ),
-      'create reel container',
-    );
+    // 2. Poll Children (Wait for them to be READY)
+    await this.pollMultipleContainers(childIds, token);
 
-    await this.pollMediaProcessing(response.data.id, accessToken);
+    // 3. Create Parent
+    const containerId = await this.createIGContainer(igId, token, {
+      media_type: 'CAROUSEL',
+      caption: post.content,
+      children: childIds.join(','),
+      ...this.extractMetadataParams(post.metadata, false),
+    });
+
+    // 4. Poll Parent (Wait for IT to be READY)
+    await this.pollMediaProcessing(containerId, token);
+
 
     return {
       success: true,
-      containerId: response.data.id,
+      containerId,
+      mediaType: 'CAROUSEL',
+      containerStatus: 'READY',
+    };
+  }
+
+  private async handleReel(
+    post: MetaScheduledPost,
+    igId: string,
+    token: string,
+  ): Promise<InstagramPublishingResult> {
+    if (post.mediaUrls.length !== 1)
+      throw new Error('Reels support exactly 1 video');
+
+    const containerId = await this.createIGContainer(igId, token, {
+      media_type: 'REELS',
+      video_url: post.mediaUrls[0],
+      caption: post.content,
+      share_to_feed: post.metadata?.shareToFeed ?? true,
+      cover_url: post.metadata?.coverUrl,
+      audio_name: post.metadata?.audioName,
+      ...this.extractMetadataParams(post.metadata, false),
+    });
+
+    await this.pollMediaProcessing(containerId, token);
+
+    return {
+      success: true,
+      containerId,
       mediaType: 'REEL',
       containerStatus: 'READY',
     };
   }
 
   // ===========================================================================
-  // HELPERS (Uploads & Polling)
+  // THE PRIMITIVE (The Unified Creator)
   // ===========================================================================
 
-  private async createCarouselItem(
+  /**
+   * One method to rule them all.
+   * Handles creating Single, Reel, Carousel, and Carousel Items.
+   */
+  private async createIGContainer(
     igUserId: string,
-    url: string,
     accessToken: string,
-    isVideo: boolean,
-    metadata: any,
+    params: Record<string, any>,
   ): Promise<string> {
-    const params: any = {
-      access_token: accessToken,
-      is_carousel_item: true,
-    };
-
-    if (isVideo) {
-      params.media_type = 'VIDEO';
-      params.video_url = url;
-    } else {
-      params.image_url = url;
-      // Note: User Tags are NOT supported on carousel ITEMS via API currently,
-      // only on single images or sometimes parent (platform dependent).
-      // We skip tag application here to be safe.
-    }
-
-    const res = await this.makeApiRequest(
-      () =>
-        firstValueFrom(
-          this.http.post(`${this.GRAPH_API_URL}/${igUserId}/media`, null, {
-            params,
-          }),
-        ),
-      'create carousel item',
+    Object.keys(params).forEach(
+      (key) => params[key] === undefined && delete params[key],
     );
-    return res.data.id;
-  }
 
-  private async publishContainer(
-    igUserId: string,
-    containerId: string,
-    accessToken: string,
-  ): Promise<PublishingResult> {
-    this.logger.log(`Publishing Container: ${containerId}`);
+    params.access_token = accessToken;
+
+    this.logger.debug(`Creating Container with Body:`, params);
 
     const response = await this.makeApiRequest(
       () =>
         firstValueFrom(
-          this.http.post(
-            `${this.GRAPH_API_URL}/${igUserId}/media_publish`,
-            null,
-            {
-              params: { access_token: accessToken, creation_id: containerId },
-            },
-          ),
+          this.http.post(`${this.GRAPH_API_URL}/${igUserId}/media`, params),
+        ),
+      `create container (${params.media_type || 'ITEM'})`,
+    );
+
+    return response.data.id;
+  }
+
+  // ===========================================================================
+  // HELPERS
+  // ===========================================================================
+
+  private async publishContainer(
+    igId: string,
+    containerId: string,
+    token: string,
+  ): Promise<PublishingResult> {
+    this.logger.log(`Publishing Container: ${containerId}`);
+    const res = await this.makeApiRequest(
+      () =>
+        firstValueFrom(
+          this.http.post(`${this.GRAPH_API_URL}/${igId}/media_publish`, null, {
+            params: { access_token: token, creation_id: containerId },
+          }),
         ),
       'publish media',
     );
-
-    return {
-      success: true,
-      platformPostId: response.data.id,
-    };
+    return { success: true, platformPostId: res.data.id };
   }
 
-  // --- Metadata Helper ---
-  private applyMetadata(params: any, metadata: any, allowUserTags: boolean) {
-    if (!metadata) return;
+  /**
+   * Extracts common metadata like Location and User Tags
+   */
+  private extractMetadataParams(metadata: any, allowUserTags: boolean) {
+    if (!metadata) return {};
+
+    const params: any = {};
     if (metadata.locationId) params.location_id = metadata.locationId;
-
-    if (allowUserTags && metadata.userTags) {
+    if (allowUserTags && metadata.userTags)
       params.user_tags = JSON.stringify(metadata.userTags);
-    }
+
+    return params;
   }
 
-  // --- Polling Helpers (Simplified) ---
-  private async pollMediaProcessing(containerId: string, accessToken: string) {
+  private async pollMediaProcessing(containerId: string, token: string) {
     let attempts = 0;
+    let delay = this.POLLING_CONFIG.DELAY_MS;
+
     while (attempts < this.POLLING_CONFIG.MAX_ATTEMPTS) {
-      const status = await this.checkStatus(containerId, accessToken);
+      const res = await firstValueFrom(
+        this.http.get(`${this.GRAPH_API_URL}/${containerId}`, {
+          params: { access_token: token, fields: 'status_code' },
+        }),
+      );
+
+      const status = res.data.status_code;
       if (status === 'FINISHED') return;
       if (status === 'ERROR')
-        throw new Error('Media processing failed on Instagram side');
+        throw new Error('Instagram failed to process media');
 
       attempts++;
-      await new Promise((r) => setTimeout(r, this.POLLING_CONFIG.DELAY_MS));
+      // Exponential backoff
+      await new Promise((r) => setTimeout(r, delay));
+      delay = Math.min(delay * this.POLLING_CONFIG.BACKOFF_FACTOR, 10000);
     }
     throw new Error('Media processing timed out');
   }
 
-  private async pollMultipleContainers(ids: string[], accessToken: string) {
-    // Wait for all to be FINISHED
-    await Promise.all(
-      ids.map((id) => this.pollMediaProcessing(id, accessToken)),
-    );
+  private async pollMultipleContainers(ids: string[], token: string) {
+    await Promise.all(ids.map((id) => this.pollMediaProcessing(id, token)));
   }
 
-  private async checkStatus(id: string, token: string): Promise<string> {
-    const res = await firstValueFrom(
-      this.http.get(`${this.GRAPH_API_URL}/${id}`, {
-        params: { access_token: token, fields: 'status_code' },
-      }),
-    );
-    return res.data.status_code;
-  }
-
-  // --- Validation Helpers ---
   private validateMediaUrls(urls?: string[]) {
     if (!urls?.length) throw new Error('No media URLs provided');
     if (urls.length > this.MAX_CAROUSEL_ITEMS)
-      throw new Error(`Max ${this.MAX_CAROUSEL_ITEMS} items allowed`);
+      throw new Error(`Max ${this.MAX_CAROUSEL_ITEMS} items`);
   }
 
   private async detectMediaType(url: string): Promise<boolean> {
     return url.match(/\.(mp4|mov|avi|mkv)$/i) !== null || url.includes('video');
   }
-
 }

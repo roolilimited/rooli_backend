@@ -1,9 +1,5 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import {
-  BadRequestException,
-  Injectable,
-  Logger,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 
 import {
   CancelResult,
@@ -47,7 +43,6 @@ export class SocialSchedulerService {
     this.platformServices[Platform.FACEBOOK] = this.facebookService;
     this.platformServices[Platform.INSTAGRAM] = this.instagramService;
     this.platformServices[Platform.LINKEDIN] = this.linkedInService;
-
   }
 
   async schedulePost(postId: string): Promise<ScheduleResult> {
@@ -59,40 +54,60 @@ export class SocialSchedulerService {
       const delay = this.calculateDelay(post.scheduledAt);
 
       // STRATEGY: Native (Platform handles it) vs. Internal (BullMQ handles it)
-      const useNativeScheduling = this.shouldUseNativeScheduling(preparedPost.platform, delay);
+      const useNativeScheduling = this.shouldUseNativeScheduling(
+        preparedPost.platform,
+        delay,
+      );
 
       if (useNativeScheduling) {
         // Facebook Native Flow
         const result = await platformService.schedulePost(preparedPost);
-        await this.postRepo.updateFacebookScheduledPost(post.id, result.platformPostId);
-        this.logger.log(`Scheduled Native (${post.platform}): ${result.platformPostId}`);
+        await this.postRepo.updateFacebookScheduledPost(
+          post.id,
+          result.platformPostId,
+        );
+        this.logger.log(
+          `Scheduled Native (${post.platform}): ${result.platformPostId}`,
+        );
         return { success: true, jobId: result.platformPostId };
-      } 
-      else {
+      } else {
         // Internal Queue Flow (Instagram, X, LinkedIn, or FB Short-term)
         //  Pre-process (e.g., Create IG Container)
         // Platform service.schedulePost now returns { containerId } for IG, or nothing for others.
         const preResult = await platformService.schedulePost(preparedPost);
-        
+
         // Add to BullMQ
         const job = await this.queueService.queueJob(post, delay);
-        
+
         //  Update DB
         if (preResult?.containerId) {
-           await this.postRepo.updateInstagramScheduledPost(post.id, String(job.id), preResult.containerId);
+          await this.postRepo.updateInstagramScheduledPost(
+            post.id,
+            String(job.id),
+            preResult.containerId,
+          );
         } else {
-           await this.postRepo.updateBullMQScheduledPost(post.id, String(job.id), post.platform);
+          await this.postRepo.updateBullMQScheduledPost(
+            post.id,
+            String(job.id),
+            post.platform,
+          );
         }
 
-        this.logger.log(`Scheduled Internal (${post.platform}): Job ${job.id}, Delay ${delay}ms`);
-        return { success: true, jobId: String(job.id) };
+        this.logger.log(
+          `Scheduled Internal (${post.platform}): Job ${job.id}, Delay ${delay}ms`,
+        );
+        return {
+          success: true,
+          jobId: String(job.id),
+         
+        };
       }
-
     } catch (error) {
       return await this.handleSchedulingError(postId, error);
     }
   }
- 
+
   async publishImmediately(postId: string): Promise<ScheduleResult> {
     return this.executePublish(postId, 'Immediate Publish');
   }
@@ -102,13 +117,20 @@ export class SocialSchedulerService {
     await this.executePublish(postId, 'Scheduled Worker');
   }
 
-
-  private async executePublish(postId: string, context: string): Promise<ScheduleResult> {
+  private async executePublish(
+    postId: string,
+    context: string,
+  ): Promise<ScheduleResult> {
     try {
       const post = await this.postRepo.findById(postId);
 
-      if (post.status === PostStatus.PUBLISHED || post.status === PostStatus.CANCELED) {
-        this.logger.warn(`Skipping ${context}: Post ${postId} is ${post.status}`);
+      if (
+        post.status === PostStatus.PUBLISHED ||
+        post.status === PostStatus.CANCELED
+      ) {
+        this.logger.warn(
+          `Skipping ${context}: Post ${postId} is ${post.status}`,
+        );
         return { success: false, error: 'Post status invalid' };
       }
 
@@ -133,22 +155,26 @@ export class SocialSchedulerService {
 
       // Success
       await this.postRepo.updatePublishedPost(post, result);
-      this.logger.log(`Published ${postId} successfully. ID: ${result.platformPostId}`);
-      
-      return { success: true, jobId: result.platformPostId };
+      this.logger.log(
+        `Published ${postId} successfully. ID: ${result.platformPostId}`,
+      );
 
+      return { success: true, jobId: result.platformPostId };
     } catch (error) {
       this.logger.error(`${context} failed for ${postId}`, error);
       return await this.handleSchedulingError(postId, error);
     }
   }
 
-  async cancelScheduledPost(postId: string, organizationId: string): Promise<CancelResult> {
+  async cancelScheduledPost(
+    postId: string,
+    organizationId: string,
+  ): Promise<CancelResult> {
     try {
       const post = await this.postRepo.findById(postId, organizationId);
-      
+
       if (!['SCHEDULED', 'FAILED'].includes(post.status)) {
-         throw new BadRequestException('Cannot cancel this post status');
+        throw new BadRequestException('Cannot cancel this post status');
       }
 
       this.logger.log(`Cancelling Post ${postId}...`);
@@ -180,15 +206,18 @@ export class SocialSchedulerService {
       const pageAccount = post.pageAccount;
       if (!pageAccount?.accessToken) return;
 
-      const accessToken = await this.encryptionService.decrypt(pageAccount.accessToken);
+      const accessToken = await this.encryptionService.decrypt(
+        pageAccount.accessToken,
+      );
       const service = this.resolvePlatformService(post);
 
       //  Call Interface Method
       await service.deleteScheduledPost(resourceId, accessToken);
       this.logger.log(`Deleted platform resource: ${resourceId}`);
-
     } catch (error) {
-      this.logger.warn(`Failed to clean platform resource for ${post.id}: ${error.message}`);
+      this.logger.warn(
+        `Failed to clean platform resource for ${post.id}: ${error.message}`,
+      );
       // Don't throw, we still want to cancel the DB record
     }
   }
@@ -196,15 +225,16 @@ export class SocialSchedulerService {
   private resolvePlatformService(post: any) {
     // Handle the META split (FB vs IG)
     if (post.socialAccount?.platform === Platform.META) {
-      return post.platform === Platform.INSTAGRAM 
-        ? this.instagramService 
+      return post.platform === Platform.INSTAGRAM
+        ? this.instagramService
         : this.facebookService;
     }
-    
+
     // Handle standard mapping
     const service = this.platformServices[post.socialAccount?.platform];
-    if (!service) throw new Error(ERROR_MESSAGES.NO_PLATFORM_SERVICE(post.platform));
-    
+    if (!service)
+      throw new Error(ERROR_MESSAGES.NO_PLATFORM_SERVICE(post.platform));
+
     return service;
   }
 
@@ -217,22 +247,28 @@ export class SocialSchedulerService {
   /**
    * Logic to determine if we use Native API or BullMQ
    */
-  private shouldUseNativeScheduling(platform: string, delayMs: number): boolean {
+  private shouldUseNativeScheduling(
+    platform: string,
+    delayMs: number,
+  ): boolean {
     //  Only Facebook supports reliable native scheduling
     if (platform === Platform.FACEBOOK) {
       // Facebook Requirement: Must be > 10 minutes in future
       const tenMinutesMs = 10 * 60 * 1000;
       return delayMs > tenMinutesMs;
     }
-    
+
     // Everyone else (IG, X, LinkedIn) uses Internal Queue
     return false;
   }
 
-  private async handleSchedulingError(postId: string, error: any): Promise<ScheduleResult> {
+  private async handleSchedulingError(
+    postId: string,
+    error: any,
+  ): Promise<ScheduleResult> {
     const msg = error.message || 'Unknown Error';
     this.logger.error(`Error on post ${postId}: ${msg}`);
-    
+
     await this.prisma.post.update({
       where: { id: postId },
       data: {
