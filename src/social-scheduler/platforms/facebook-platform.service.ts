@@ -163,36 +163,40 @@ export class FacebookPlatformService extends BasePlatformService {
     const videoUrl = post.mediaUrls?.[0];
     if (!videoUrl) throw new Error('Reel URL missing');
 
+    // Step 1: Initialize
+    // We ask Facebook to open a session
     const initParams = { access_token: accessToken, upload_phase: 'start' };
     const initRes = await firstValueFrom(
-      this.http.post(`${this.baseUrl}/${pageId}/video_reels`, null, {
-        params: initParams,
-      }),
+      this.http.post(`${this.baseUrl}/${pageId}/video_reels`, null, { 
+        params: initParams 
+      })
     );
-
+    
     const { video_id, upload_url } = initRes.data;
 
-    this.logger.log(`Streaming Reel to Facebook: ${videoUrl}`);
-    await this.streamUrlToFacebook(videoUrl, upload_url);
+    // Step 2: Upload Hosted File
+    // Instead of streaming bytes, we tell Facebook: "Go fetch it from here"
+    this.logger.log(`Instructing Facebook to fetch Reel from: ${videoUrl}`);
+    
+    await this.uploadHostedFileToReels(upload_url, videoUrl, accessToken);
 
+    // Step 3: Finish & Publish
     const finishParams: any = {
       access_token: accessToken,
       upload_phase: 'finish',
       video_id,
-      description: post.content,
+      description: post.content, // Reels captions support hashtags
       video_state: isScheduled ? 'SCHEDULED' : 'PUBLISHED',
     };
 
     if (isScheduled) {
-      finishParams.scheduled_publish_time = Math.floor(
-        new Date(post.scheduledAt).getTime() / 1000,
-      );
+      finishParams.scheduled_publish_time = Math.floor(new Date(post.scheduledAt).getTime() / 1000);
     }
 
     const finishRes = await firstValueFrom(
-      this.http.post(`${this.baseUrl}/${pageId}/video_reels`, null, {
-        params: finishParams,
-      }),
+      this.http.post(`${this.baseUrl}/${pageId}/video_reels`, null, { 
+        params: finishParams 
+      })
     );
 
     return {
@@ -219,38 +223,30 @@ export class FacebookPlatformService extends BasePlatformService {
     return res.data.id;
   }
 
-  /**
-   * CRITICAL: Streams a file from a URL directly to Facebook's upload endpoint.
-   * This avoids loading the whole file into memory.
-   */
-  private async streamUrlToFacebook(
-    fileUrl: string,
-    uploadEndpoint: string,
+ private async uploadHostedFileToReels(
+    uploadUrl: string, 
+    fileUrl: string, 
+    accessToken: string
   ): Promise<void> {
-    // 1. Get the Read Stream from your CDN
-    const fileStream = await this.http.axiosRef({
-      url: fileUrl,
-      method: 'GET',
-      responseType: 'stream',
-    });
+    try {
+      const headers = {
+        'Authorization': `OAuth ${accessToken}`,
+        'file_url': fileUrl,
+      };
 
-    const totalLength = fileStream.headers['content-length'];
-
-    // 2. Pipe it to Facebook
-    // Note: The upload_url provided by Facebook usually contains the auth signature.
-    // We strictly send the binary data as the body.
-    await this.http.axiosRef({
-      url: uploadEndpoint,
-      method: 'POST',
-      data: fileStream.data,
-      headers: {
-        Authorization: `OAuth ${fileStream.config.headers['Authorization'] || ''}`, // usually empty/not needed for upload_url
-        'Content-Type': 'application/octet-stream',
-        'Content-Length': totalLength,
-      },
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-    });
+      const response = await firstValueFrom(
+        this.http.post(uploadUrl, null, { headers, timeout: this.uploadTimeout })
+      );
+      
+      if (!response.data.success) {
+        throw new Error(`Reel upload failed: ${JSON.stringify(response.data)}`);
+      }
+    } catch (error) {
+      if (error.response?.data?.error?.message) {
+         throw new Error(`Facebook failed to fetch video from URL: ${error.response.data.error.message}`);
+      }
+      throw error;
+    }
   }
 
   private detectMediaType(url: string = ''): 'video' | 'photo' {
@@ -376,7 +372,7 @@ export class FacebookPlatformService extends BasePlatformService {
 
       if (diffMinutes < 10) {
         throw new Error(
-          'Facebook Native Scheduling requires at least 10 minutes buffer.',
+          'Facebook Native Scheduling requires at least 10 minutes buffer. Using internal queue',
         );
       }
     }
