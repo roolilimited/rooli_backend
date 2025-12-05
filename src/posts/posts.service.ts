@@ -76,6 +76,7 @@ export class PostsService {
             ...(mediaRelation ? { mediaFileIds: mediaRelation } : {}),
             status: PostStatus.DRAFT,
             timezone: dto.timezone,
+            contentType: dto.contentType,
             scheduledAt: finalScheduledAt,
             platform: dto.platform,
             metadata: {
