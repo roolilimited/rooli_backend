@@ -66,6 +66,7 @@ export class MetaService {
         'pages_manage_engagement',
         'publish_video',
         'pages_manage_metadata',
+        'pages_read_user_engagement',
         'pages_read_user_content',
         'instagram_basic',
         'instagram_manage_messages',

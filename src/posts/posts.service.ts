@@ -36,7 +36,6 @@ export class PostsService {
   async createPost(userId: string, dto: CreatePostDto) {
     try {
       await this.validatePostCreation(userId, dto);
-      console.log(dto)
 
       // 2. Determine if this is a profile post or page post
       const isProfilePost = !dto.pageAccountId;

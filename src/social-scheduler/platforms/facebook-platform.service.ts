@@ -13,7 +13,6 @@ export class FacebookPlatformService extends BasePlatformService {
   readonly platform = Platform.FACEBOOK;
   private readonly baseUrl = 'https://graph.facebook.com/v24.0';
   private readonly maxContentLength = 63206;
-  private readonly concurrencyLimit = 3;
   private readonly uploadTimeout = 60000;
   private readonly requestTimeout = 30000;
   protected readonly logger = new Logger(FacebookPlatformService.name);
@@ -34,6 +33,12 @@ export class FacebookPlatformService extends BasePlatformService {
         return this.handleReel(post, accessToken, pageId, true);
       }
 
+      // Check for Video (Single)
+      const mediaType = this.detectMediaType(post.mediaUrls?.[0]);
+      if (mediaType === 'video') {
+        return this.handleVideo(post, accessToken, pageId, true);
+      }
+
       return this.handleFeedPost(post, accessToken, pageId, true);
     }, 'schedule Facebook post');
   }
@@ -50,6 +55,11 @@ export class FacebookPlatformService extends BasePlatformService {
         return this.handleReel(post, accessToken, pageId, false);
       }
 
+      const mediaType = this.detectMediaType(post.mediaUrls?.[0]);
+      if (mediaType === 'video') {
+        return this.handleVideo(post, accessToken, pageId, false);
+      }
+
       return this.handleFeedPost(post, accessToken, pageId, false);
     }, 'publish immediately to Facebook');
   }
@@ -58,6 +68,10 @@ export class FacebookPlatformService extends BasePlatformService {
   // HANDLERS (Unified Logic for Scheduled & Immediate)
   // ===========================================================================
 
+  /**
+   * HANDLER A: Feed Post (Text + Photos Only)
+   * It is strictly for Photos/Text.
+   */
   private async handleFeedPost(
     post: any,
     accessToken: string,
@@ -65,36 +79,22 @@ export class FacebookPlatformService extends BasePlatformService {
     isScheduled: boolean,
   ) {
     const attachedMedia = [];
-    console.log(post, pageId)
 
-    // 1. Upload ALL media (Photos AND Videos) as unpublished staging assets
+    // Upload Photos to Staging (Photos Only)
     if (post.mediaUrls?.length) {
-      this.logger.log(
-        `Uploading ${post.mediaUrls.length} items for staging...`,
-      );
-
+      this.logger.log(`Uploading ${post.mediaUrls.length} photos...`);
       for (const url of post.mediaUrls) {
-        const type = this.detectMediaType(url);
-        let mediaId: string;
-
-        if (type === 'video') {
-          mediaId = await this.uploadStagingVideo(pageId, url, accessToken);
-        } else {
-          mediaId = await this.uploadStagingPhoto(pageId, url, accessToken);
-        }
-
-        if (mediaId) attachedMedia.push({ media_fbid: mediaId });
+        const id = await this.uploadStagingPhoto(pageId, url, accessToken);
+        attachedMedia.push({ media_fbid: id });
       }
     }
 
-    // 2. Create the Post Container
     const params: any = {
       message: post.content,
       access_token: accessToken,
       published: !isScheduled,
     };
 
-    // Attach the mixed list of IDs (Photos + Videos)
     if (attachedMedia.length > 0) {
       params.attached_media = JSON.stringify(attachedMedia);
     }
@@ -108,8 +108,45 @@ export class FacebookPlatformService extends BasePlatformService {
     const response = await firstValueFrom(
       this.http.post(`${this.baseUrl}/${pageId}/feed`, null, { params }),
     );
-    console.log(response)
 
+    return {
+      success: true,
+      platformPostId: response.data.id,
+      metadata: response.data,
+    };
+  }
+
+  private async handleVideo(
+    post: any,
+    accessToken: string,
+    pageId: string,
+    isScheduled: boolean,
+  ) {
+    const videoUrl = post.mediaUrls?.[0];
+    if (!videoUrl) throw new Error('Video URL missing');
+
+    const params: any = {
+      description: post.content, // Acts as the caption
+      title: post.content ? post.content.substring(0, 50) : 'Video',
+      access_token: accessToken,
+      file_url: videoUrl,
+      published: !isScheduled, // If false, it creates a "Scheduled" video object
+    };
+
+    if (isScheduled) {
+      params.scheduled_publish_time = Math.floor(
+        new Date(post.scheduledAt).getTime() / 1000,
+      );
+    }
+
+    this.logger.log(`Posting Video to ${pageId}...`);
+
+    const response = await firstValueFrom(
+      this.http.post(`${this.baseUrl}/${pageId}/videos`, null, {
+        params,
+        timeout: this.uploadTimeout,
+      }),
+    );
     return {
       success: true,
       platformPostId: response.data.id,
@@ -179,29 +216,6 @@ export class FacebookPlatformService extends BasePlatformService {
     const res = await firstValueFrom(
       this.http.post(`${this.baseUrl}/${pageId}/photos`, null, { params }),
     );
-    return res.data.id;
-  }
-
-  /**
-   * New Helper: Uploads a video but does NOT post it to the feed.
-   * This allows it to be attached to a mixed media post later.
-   */
-  private async uploadStagingVideo(
-    pageId: string,
-    url: string,
-    accessToken: string,
-  ): Promise<string> {
-    const params = {
-      file_url: url,
-      published: false, // Critical: Don't show on feed yet
-      access_token: accessToken,
-    };
-
-    // Note: 'videos' endpoint usually supports file_url for standard videos
-    const res = await firstValueFrom(
-      this.http.post(`${this.baseUrl}/${pageId}/videos`, null, { params }),
-    );
-
     return res.data.id;
   }
 
@@ -297,7 +311,7 @@ export class FacebookPlatformService extends BasePlatformService {
   private validateFacebookPost(
     post: MetaScheduledPost,
     requirePageId = false,
-    isScheduling = false, // <--- New Flag
+    isScheduling = false,
   ): void {
     if (!post) throw new Error('Post data is required');
     if (requirePageId && !post.pageId?.trim())
@@ -322,6 +336,39 @@ export class FacebookPlatformService extends BasePlatformService {
       );
     }
 
+    // 2. Media Validation Logic
+    if (post.mediaUrls?.length) {
+      // Check invalid URLs
+      const invalidUrls = post.mediaUrls.filter((url) => !this.isValidUrl(url));
+      if (invalidUrls.length > 0) {
+        throw new Error(`Invalid media URL format: ${invalidUrls.join(', ')}`);
+      }
+
+      // --- NEW: Check Media Mix ---
+      let videoCount = 0;
+      let photoCount = 0;
+
+      for (const url of post.mediaUrls) {
+        if (this.detectMediaType(url) === 'video') {
+          videoCount++;
+        } else {
+          photoCount++;
+        }
+      }
+
+      // Rule A: No Mixed Media
+      if (videoCount > 0 && photoCount > 0) {
+        throw new Error(
+          'Facebook does not support mixing Photos and Videos in the same post.',
+        );
+      }
+
+      // Rule B: Max 1 Video
+      if (videoCount > 1) {
+        throw new Error('Facebook supports only ONE video per post.');
+      }
+    }
+
     if (isScheduling) {
       const scheduleDate = new Date(post.scheduledAt);
       const now = new Date();
@@ -332,6 +379,15 @@ export class FacebookPlatformService extends BasePlatformService {
           'Facebook Native Scheduling requires at least 10 minutes buffer.',
         );
       }
+    }
+  }
+
+  private isValidUrl(url: string): boolean {
+    try {
+      new URL(url);
+      return true;
+    } catch {
+      return false;
     }
   }
 }

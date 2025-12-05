@@ -123,8 +123,6 @@ export class PreparePostService {
           }
           metaPost.instagramBusinessId = pageAccount.instagramBusinessId;
         }
-        console.log(metaPost);
-
         return metaPost;
       }
 

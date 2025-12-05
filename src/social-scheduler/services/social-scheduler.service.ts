@@ -54,7 +54,6 @@ export class SocialSchedulerService {
     try {
       const post = await this.postRepo.findById(postId);
       const preparedPost = await this.prepareService.preparePlatformPost(post);
-      console.log(preparedPost)
       const platformService = this.resolvePlatformService(post);
 
       const delay = this.calculateDelay(post.scheduledAt);
