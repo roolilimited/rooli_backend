@@ -20,7 +20,7 @@ import {
 } from './interfaces/index.interface';
 import { EncryptionService } from '@/common/utility/encryption.service';
 import { PrismaService } from '@/prisma/prisma.service';
-import { Prisma } from '@generated/client';
+import { Prisma, SocialAccountType } from '@generated/client';
 import * as https from 'https';
 
 @Injectable()
@@ -50,33 +50,13 @@ export class LinkedInService {
   // ==================== OAUTH FLOW ====================
 
   // PROFILE CONNECTION FLOW
-  async getProfileAuthUrl(userId: string): Promise<string> {
+  async getAuthUrl(userId: string): Promise<string> {
     const state: LinkedInOAuthState = {
       userId,
       connectionType: 'PROFILE',
       timestamp: Date.now(),
     };
 
-    return this.buildAuthUrl(state, LINKEDIN_CONSTANTS.PROFILE_SCOPES);
-  }
-
-  async getPagesAuthUrl(
-    userId: string,
-    organizationId: string,
-  ): Promise<string> {
-    const state: LinkedInOAuthState = {
-      organizationId,
-      userId,
-      connectionType: 'PAGES',
-      timestamp: Date.now(),
-    };
-
-    return this.buildAuthUrl(state, LINKEDIN_CONSTANTS.PAGES_SCOPES);
-  }
-  private async buildAuthUrl(
-    state: LinkedInOAuthState,
-    scopes: string[],
-  ): Promise<string> {
     const encryptedState = await this.encryptionService.encrypt(
       JSON.stringify(state),
     );
@@ -86,7 +66,7 @@ export class LinkedInService {
       client_id: this.clientId,
       redirect_uri: this.redirectUri,
       state: encryptedState,
-      scope: scopes.join(' '),
+      scope: LINKEDIN_CONSTANTS.SCOPES.join(' '),
     });
 
     return `${LINKEDIN_CONSTANTS.AUTH_URL}/authorization?${params.toString()}`;
@@ -98,86 +78,34 @@ export class LinkedInService {
       const tokenData = await this.exchangeCodeForToken(code);
       const profile = await this.fetchProfile(tokenData.access_token);
 
-      if (state.connectionType === 'PROFILE') {
-        return this.handleProfileConnection(profile, tokenData, state);
-      } else if (state.connectionType === 'PAGES') {
-        return this.handlePagesConnection(profile, tokenData, state);
-      } else {
-        throw new BadRequestException('Invalid connection type');
-      }
+      // We pass 'PROFILE' because this is the root identity.
+      // It holds the token that can do EVERYTHING.
+      const socialAccount = await this.upsertSocialAccount(
+        profile,
+        tokenData,
+        state,
+      );
+
+      // Discover Pages immediately
+      const availablePages = await this.fetchUserAdministeredPages(
+        tokenData.access_token,
+      );
+
+      //Cache them in the Profile's metadata
+      await this.updateSocialAccountMetadata(socialAccount.id, {
+        lastDiscoveredPages: availablePages,
+      });
+      return {
+        socialAccount,
+        discoveredPages: availablePages,
+      };
     } catch (error) {
-      console.log(error)
       this.logger.error('handleCallback failed', {
         error: error?.message,
         stack: error?.stack,
       });
       throw error;
     }
-  }
-
-  private async handleProfileConnection(
-    profile: LinkedInProfile,
-    tokenData: TokenResponse,
-    state: LinkedInOAuthState,
-  ): Promise<any> {
-    const socialAccount = await this.upsertSocialAccount(
-      profile,
-      tokenData,
-      state,
-      'PROFILE',
-    );
-
-    this.logger.log('LinkedIn profile account connected', {
-      accountId: socialAccount.id,
-      platformAccountId: socialAccount.platformAccountId,
-    });
-
-    return {
-      socialAccount,
-      pages: [],
-      connectionType: 'PROFILE',
-    };
-  }
-
-  private async handlePagesConnection(
-    profile: LinkedInProfile,
-    tokenData: TokenResponse,
-    state: LinkedInOAuthState,
-  ): Promise<any> {
-    
-    const socialAccount = await this.upsertSocialAccount(
-      profile,
-      tokenData,
-      state,
-      'PAGE',
-    );
-
-    this.logger.log('LinkedIn pages account created', {
-      accountId: socialAccount.id,
-      platformAccountId: socialAccount.platformAccountId,
-      state
-    });
-
-    // Discover available pages
-    const availablePages = await this.fetchUserAdministeredPages(
-      tokenData.access_token,
-    );
-
-    this.logger.log('Available pages discovered', {
-      accountId: socialAccount.id,
-      pageCount: availablePages.length,
-    });
-
-    // Store discovered pages in metadata
-    await this.updateSocialAccountMetadata(socialAccount.id, {
-      lastDiscoveredPages: availablePages,
-    });
-
-    return {
-      socialAccount,
-      availablePages,
-      connectionType: 'PAGES',
-    };
   }
 
   // ==================== PAGE CONNECTION ====================
@@ -526,7 +454,6 @@ export class LinkedInService {
 
       return pages;
     } catch (error) {
-      console.log(error);
       this.logger.error('Failed to discover administered pages', {
         error: error.response?.data || error.message,
         status: error.response?.status,
@@ -546,33 +473,23 @@ export class LinkedInService {
     }
   }
 
-   async requestTokenRefresh(
-    socialAccountId: string,
-  ){
+  async requestTokenRefresh(socialAccountId: string) {
     const socialAccount = await this.prisma.socialAccount.findUnique({
       where: { id: socialAccountId },
     });
 
-    if (!socialAccount) {
-      throw new NotFoundException('Social account not found');
-    }
-
-    const encryptedRefreshToken = socialAccount.refreshToken;
-    if (!encryptedRefreshToken) {
+    if (!socialAccount || !socialAccount.refreshToken) {
       throw new BadRequestException(
-        'No refresh token available for this account',
+        'Account not found or missing refresh token',
       );
     }
 
     let refreshToken: string;
     try {
       refreshToken = await this.encryptionService.decrypt(
-        encryptedRefreshToken,
+        socialAccount.refreshToken,
       );
     } catch (err) {
-      this.logger.error('Failed to decrypt LinkedIn refresh token', {
-        err: err?.message ?? err,
-      });
       throw new InternalServerErrorException('Failed to decrypt refresh token');
     }
 
@@ -624,35 +541,40 @@ export class LinkedInService {
         ? await this.encryptionService.encrypt(data.refresh_token)
         : undefined;
 
-      const tokenExpiresAt = data.expires_in
-        ? this.secondsToUTCDate(data.expires_in)
-        : null;
+      const tokenExpiresAt = this.secondsToUTCDate(data.expires_in);
+      const refreshTokenExpiresAt = this.secondsToUTCDate(
+        data.refresh_token_expires_in,
+      );
 
-      const refreshTokenExpiresAt = data.refresh_token_expires_in
-        ? this.secondsToUTCDate(data.refresh_token_expires_in)
-        : null;
+      // Transaction to update Parent AND Children
+      await this.prisma.$transaction(async (tx) => {
+        //  Update the Parent (Social Account)
+        await tx.socialAccount.update({
+          where: { id: socialAccountId },
+          data: {
+            accessToken: encryptedAccessToken,
+            refreshToken: encryptedNewRefreshToken,
+            tokenExpiresAt,
+            refreshTokenExpiresAt,
+            updatedAt: new Date(),
+          },
+        });
 
-      await this.prisma.socialAccount.update({
-        where: { id: socialAccountId },
-        data: {
-          accessToken: encryptedAccessToken,
-          refreshToken: encryptedNewRefreshToken,
-          tokenExpiresAt,
-          refreshTokenExpiresAt,
-
-          updatedAt: new Date(),
-        },
+        // 2. Update all Child Pages (PageAccounts)
+        // Since they share the "Super Token", we must keep them in sync
+        await tx.pageAccount.updateMany({
+          where: { socialAccountId: socialAccountId },
+          data: {
+            accessToken: encryptedAccessToken,
+            updatedAt: new Date(),
+          },
+        });
       });
 
-      this.logger.debug('LinkedIn token refreshed successfully', {
-        socialAccountId,
-        expiresIn: data.expires_in,
-        hasRefreshToken: !!data.refresh_token,
-      });
-
-      return {
-        message: "Access token gotten successfully"
-      };
+      this.logger.log(
+        `Refreshed token for account ${socialAccountId} and its pages.`,
+      );
+      return { message: 'Access token refreshed successfully' };
     } catch (error) {
       this.logger.error('LinkedIn token refresh failed', {
         error,
@@ -668,103 +590,98 @@ export class LinkedInService {
     profile: LinkedInProfile,
     tokenData: TokenResponse,
     state: LinkedInOAuthState,
-    accountType: 'PAGE' | 'PROFILE',
   ) {
-    console.log(state)
-    try{
-    const tokenExpiresAt = tokenData.expires_in
-      ? this.secondsToUTCDate(tokenData.expires_in)
-      : null;
+    try {
+      const tokenExpiresAt = tokenData.expires_in
+        ? this.secondsToUTCDate(tokenData.expires_in)
+        : null;
 
-    const refreshTokenExpiresAt = tokenData.refresh_token_expires_in
-      ? this.secondsToUTCDate(tokenData.refresh_token_expires_in)
-      : null;
+      const refreshTokenExpiresAt = tokenData.refresh_token_expires_in
+        ? this.secondsToUTCDate(tokenData.refresh_token_expires_in)
+        : null;
 
-    const grantedScopes =
-      tokenData.scope?.split(/[\s,]+/).filter(Boolean) ??
-      this.configService
-        .get<string>('LINKEDIN_SCOPES', '')
-        .split(/[\s,]+/)
-        .filter(Boolean);
+      const grantedScopes =
+        tokenData.scope?.split(/[\s,]+/).filter(Boolean) ??
+        this.configService
+          .get<string>('LINKEDIN_SCOPES', '')
+          .split(/[\s,]+/)
+          .filter(Boolean);
 
-    const encryptedAccessToken = await this.encryptionService.encrypt(
-      tokenData.access_token,
-    );
+      const encryptedAccessToken = await this.encryptionService.encrypt(
+        tokenData.access_token,
+      );
 
-    const encryptedRefreshToken = tokenData.refresh_token
-      ? await this.encryptionService.encrypt(tokenData.refresh_token)
-      : null;
+      const encryptedRefreshToken = tokenData.refresh_token
+        ? await this.encryptionService.encrypt(tokenData.refresh_token)
+        : null;
 
-    const dbPlatformAccountId =
-      accountType === 'PAGE' ? `PAGE-${profile.id}` : profile.id;
+      const displayName =
+        `${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim();
+      const username = (profile.firstName ?? '').toLowerCase();
 
-    const displayName =
-      `${profile.firstName ?? ''} ${profile.lastName ?? ''}`.trim();
-    const username = (profile.firstName ?? '').toLowerCase();
+      const accountData = {
+        platformAccountId: profile.id,
+        username,
+        name: displayName,
+        displayName,
+        connectedBy: { connect: { id: state.userId } },
+        profileImage:
+          profile.profileImage || profile.raw?.profilePicture?.displayImage,
+        accessToken: encryptedAccessToken,
+        refreshToken: encryptedRefreshToken,
+        tokenExpiresAt,
+        refreshTokenExpiresAt,
+        scopes: grantedScopes,
+        isActive: true,
+        accountType: SocialAccountType.PROFILE,
+        lastSyncAt: new Date(),
+      };
 
-    const accountData = {
-      platformAccountId: dbPlatformAccountId,
-      username,
-      name: displayName,
-      displayName,
-      connectedBy:{ connect: { id: state.userId }},
-      profileImage:
-        profile.profileImage || profile.raw?.profilePicture?.displayImage,
-      accessToken: encryptedAccessToken,
-      refreshToken: encryptedRefreshToken,
-      tokenExpiresAt,
-      refreshTokenExpiresAt,
-      scopes: grantedScopes,
-      isActive: true,
-      accountType,
-      lastSyncAt: new Date(),
-    };
-
-    if (state.organizationId) {
-      // Organization-scoped account
-      return this.prisma.socialAccount.upsert({
-        where: {
-          platform_platformAccountId: {
-            platform: 'LINKEDIN',
-            platformAccountId: dbPlatformAccountId,
+      if (state.organizationId) {
+        // Organization-scoped account
+        return this.prisma.socialAccount.upsert({
+          where: {
+            platform_platformAccountId: {
+              platform: 'LINKEDIN',
+              platformAccountId: profile.id,
+            },
           },
-        },
-        create: {
-          organization: {
-            connect: { id: state.organizationId },
-          },
-          platform: 'LINKEDIN',
-          ...accountData,
-        },
-        update: accountData,
-      });
-    } else {
-      // User-level account
-      const existing = await this.prisma.socialAccount.findFirst({
-        where: {
-          platform: 'LINKEDIN',
-          platformAccountId: dbPlatformAccountId,
-        },
-      });
-
-      if (existing) {
-        return this.prisma.socialAccount.update({
-          where: { id: existing.id },
-          data: accountData,
-        });
-      } else {
-        return this.prisma.socialAccount.create({
-          data: {
+          create: {
+            organization: {
+              connect: { id: state.organizationId },
+            },
             platform: 'LINKEDIN',
             ...accountData,
           },
+          update: accountData,
         });
+      } else {
+        // User-level account
+        const existing = await this.prisma.socialAccount.findFirst({
+          where: {
+            platform: 'LINKEDIN',
+            platformAccountId: profile.id,
+          },
+        });
+
+        if (existing) {
+          return this.prisma.socialAccount.update({
+            where: { id: existing.id },
+            data: accountData,
+          });
+        } else {
+          return this.prisma.socialAccount.create({
+            data: {
+              platform: 'LINKEDIN',
+              ...accountData,
+            },
+          });
+        }
       }
+    } catch (err) {
+      console.log(err);
+      throw err;
     }
-  }catch(err){
-    console.log(err)
-    throw err
-  }
   }
 
   private async updateSocialAccountMetadata(

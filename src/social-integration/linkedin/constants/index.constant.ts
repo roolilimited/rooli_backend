@@ -11,15 +11,12 @@ export const LINKEDIN_CONSTANTS = {
     'DIRECT_SPONSORED_CONTENT_POSTER',
     'RECRUITING_POSTER',
   ]),
-  PROFILE_SCOPES: [
+  SCOPES: [
     'r_basicprofile',
     'w_member_social',
     'r_member_postAnalytics',
     'r_member_profileAnalytics',
     'w_member_social_feed',
-  ] as string[],
-  PAGES_SCOPES: [
-    'r_basicprofile',
     'rw_organization_admin',
     'w_organization_social',
     'r_organization_social',

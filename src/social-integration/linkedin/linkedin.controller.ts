@@ -31,34 +31,16 @@ import { ConnectedPageDto } from './dto/get-connected-pages.dto';
 export class LinkedinController {
   constructor(private readonly service: LinkedInService) {}
 
-  @Get('connect/profile')
+  @Get('connect')
   @ApiOperation({
     summary: 'Begin OAuth to connect a personal LinkedIn profile.',
     description:
       'Generates the LinkedIn OAuth authorization URL for the authenticated user. ' +
       'The `userId` is extracted from the authenticated session/token and does not need to be sent by the client.',
   })
-  @ApiResponse({
-    status: 200,
-    description: 'Authorization URL generated successfully.',
-    schema: {
-      example:
-        'https://www.linkedin.com/oauth/v2/authorization?response_type=code...',
-    },
-  })
-  async connectProfile(@Req() req) {
-    return this.service.getProfileAuthUrl(req.user.id);
-  }
-
-  @Get('connect/pages')
-  @ApiOperation({
-    summary: 'Begin OAuth to discover and connect LinkedIn Company Pages',
-    description:
-      'Starts the LinkedIn OAuth process for page discovery. The authenticated user is automatically used; frontend send an internal `organizationId` to link discovered pages.',
-  })
   @ApiQuery({
     name: 'organizationId',
-    required: true,
+    required: false,
     type: String,
     description: 'Internal organization ID to associate LinkedIn pages with.',
     example: 'org_12345',
@@ -68,14 +50,11 @@ export class LinkedinController {
     description: 'Authorization URL generated successfully.',
     schema: {
       example:
-        'https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=...&redirect_uri=...&state=...&scope=rw_organization_admin',
+        'https://www.linkedin.com/oauth/v2/authorization?response_type=code...',
     },
   })
-  async connectPages(
-    @Req() req,
-    @Query('organizationId') organizationId?: string,
-  ) {
-    return this.service.getPagesAuthUrl(req.user.id, organizationId);
+  async connectProfile(@Req() req,  @Query('organizationId') organizationId?: string,) {
+    return this.service.getAuthUrl(req.user.id);
   }
 
   @Get('callback')

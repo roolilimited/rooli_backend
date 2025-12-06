@@ -8,12 +8,19 @@ import {
   LinkedInScheduledPost,
 } from '../interfaces/social-scheduler.interface';
 import { BasePlatformService } from './base-platform.service';
+import * as https from 'https';
 
 @Injectable()
 export class LinkedInPlatformService extends BasePlatformService {
   readonly platform = 'LINKEDIN';
-  private readonly API_VERSION = '202401'; // Use a recent version
+  private readonly API_VERSION = '202501'; // Use a recent version
   private readonly BASE_URL = 'https://api.linkedin.com/rest';
+
+  private readonly httpsAgent = new https.Agent({
+    family: 4, // FORCE IPv4
+    keepAlive: true,
+    timeout: 30000,
+  });
 
   constructor(http: HttpService) {
     super(http);
@@ -36,7 +43,9 @@ export class LinkedInPlatformService extends BasePlatformService {
     }, 'validate LinkedIn post');
   }
 
-  async publishImmediately(post: LinkedInScheduledPost): Promise<PublishingResult> {
+  async publishImmediately(
+    post: LinkedInScheduledPost,
+  ): Promise<PublishingResult> {
     return this.makeApiRequest(async () => {
       this.validatePost(post);
       const { accessToken, accountId, content, mediaUrls } = post;
@@ -48,31 +57,36 @@ export class LinkedInPlatformService extends BasePlatformService {
       if (mediaUrls?.length) {
         this.logger.log(`Uploading ${mediaUrls.length} assets to LinkedIn...`);
         for (const url of mediaUrls) {
-          const assetUrn = await this.handleMediaUpload(url, accessToken, authorUrn);
+          const assetUrn = await this.handleMediaUpload(
+            url,
+            accessToken,
+            authorUrn,
+          );
           if (assetUrn) assets.push(assetUrn);
         }
       }
 
       // Create the Post
       return await this.createPost(authorUrn, content, assets, accessToken);
-
     }, 'publish immediately to LinkedIn');
   }
 
-
   //this deletes the live post
-  async deleteScheduledPost(postId: string, accessToken: string): Promise<boolean> {
+  async deleteScheduledPost(
+    postId: string,
+    accessToken: string,
+  ): Promise<boolean> {
     return this.makeApiRequest(async () => {
       if (!postId) throw new Error('Post ID (URN) is required');
-      
 
-      const urn = this.formatPostUrn(postId); 
+      const urn = this.formatPostUrn(postId);
       const encodedUrn = encodeURIComponent(urn);
 
       await firstValueFrom(
         this.http.delete(`${this.BASE_URL}/posts/${encodedUrn}`, {
+          httpsAgent: this.httpsAgent,
           headers: this.getHeaders(accessToken),
-        })
+        }),
       );
 
       this.logger.log(`Deleted LinkedIn Post: ${postId}`);
@@ -88,21 +102,22 @@ export class LinkedInPlatformService extends BasePlatformService {
     authorUrn: string,
     text: string,
     assetUrns: string[], // e.g. ["urn:li:image:...", "urn:li:video:..."]
-    accessToken: string
+    accessToken: string,
   ): Promise<PublishingResult> {
-
     // 1. VALIDATE MEDIA TYPES
-    const hasVideo = assetUrns.some(urn => urn.includes(':video:'));
-    const hasImage = assetUrns.some(urn => urn.includes(':image:'));
+    const hasVideo = assetUrns.some((urn) => urn.includes(':video:'));
+    const hasImage = assetUrns.some((urn) => urn.includes(':image:'));
 
     if (hasVideo && hasImage) {
-      throw new Error('LinkedIn does not support mixing Photos and Videos in the same post.');
+      throw new Error(
+        'LinkedIn does not support mixing Photos and Videos in the same post.',
+      );
     }
 
     if (hasVideo && assetUrns.length > 1) {
       throw new Error('LinkedIn supports only ONE video per post.');
     }
-    
+
     const postBody: any = {
       author: authorUrn,
       commentary: text || '',
@@ -110,10 +125,10 @@ export class LinkedInPlatformService extends BasePlatformService {
       distribution: {
         feedDistribution: 'MAIN_FEED',
         targetEntities: [],
-        thirdPartyDistributionChannels: []
+        thirdPartyDistributionChannels: [],
       },
       lifecycleState: 'PUBLISHED',
-      isReshareDisabledByAuthor: false
+      isReshareDisabledByAuthor: false,
     };
 
     // Attach Media
@@ -131,8 +146,8 @@ export class LinkedInPlatformService extends BasePlatformService {
         // Note: LinkedIn API v2 'posts' endpoint handles multi-image via 'multiImage' type
         postBody.content = {
           multiImage: {
-            images: assetUrns.map(urn => ({ id: urn }))
-          }
+            images: assetUrns.map((urn) => ({ id: urn })),
+          },
         };
       }
     }
@@ -141,8 +156,9 @@ export class LinkedInPlatformService extends BasePlatformService {
 
     const response = await firstValueFrom(
       this.http.post(`${this.BASE_URL}/posts`, postBody, {
+        httpsAgent: this.httpsAgent,
         headers: this.getHeaders(accessToken),
-      })
+      }),
     );
 
     // LinkedIn returns the ID in the 'x-linkedin-id' header or the body depending on version
@@ -157,7 +173,7 @@ export class LinkedInPlatformService extends BasePlatformService {
       success: true,
       platformPostId: platformPostId,
       publishedAt: new Date(),
-      metadata: response.data
+      metadata: response.data,
     };
   }
 
@@ -165,106 +181,230 @@ export class LinkedInPlatformService extends BasePlatformService {
   // MEDIA UPLOAD WORKFLOW (3-Step Process)
   // ===========================================================================
 
-  private async handleMediaUpload(url: string, accessToken: string, authorUrn: string): Promise<string> {
-    const isVideo = this.detectMediaType(url) === 'video';
-    const recipe = isVideo 
-      ? 'urn:li:digitalmediaRecipe:feedshare-video' 
+  private async handleMediaUpload(
+    url: string,
+    accessToken: string,
+    authorUrn: string,
+  ): Promise<string> {
+    const mediaType = this.detectMediaType(url);
+    const isVideo = mediaType === 'video';
+
+    const recipe = isVideo
+      ? 'urn:li:digitalmediaRecipe:feedshare-video'
       : 'urn:li:digitalmediaRecipe:feedshare-image';
 
-    // Step 1: Register Upload
-    const registerResponse = await this.registerUpload(authorUrn, recipe, accessToken);
-    const { uploadUrl, asset } = registerResponse;
+    // 1. Get File Size
+    let fileSize = 0;
+    if (isVideo) {
+      try {
+        const head = await this.http.axiosRef.head(url, {
+          httpsAgent: this.httpsAgent,
+        });
+        fileSize = parseInt(head.headers['content-length'], 10);
+      } catch (e) {
+        this.logger.warn(`Could not determine file size.`);
+      }
+    }
 
-    // Step 2: Stream Upload
-    await this.uploadBinary(uploadUrl, url);
+    // 2. Register
+    const { uploadUrl, asset, uploadToken } = await this.registerUpload(
+      authorUrn,
+      recipe,
+      accessToken,
+      fileSize,
+    );
 
-    // Step 3: Verify (Optional but recommended for videos)
-    // For images, it's usually instant. For videos, you might need to wait.
-    // We skip explicit polling here for speed, relying on LinkedIn's async processing.
-    
-    return asset; // Return the URN (urn:li:image:123...)
+    // 3. Upload & Capture ETag
+    const etag = await this.uploadBinary(uploadUrl, url);
+
+    // 4. Video Specific Steps
+    if (isVideo) {
+      // STRICT CHECK REMOVED: uploadToken is allowed to be empty
+      if (!etag) {
+        throw new Error(
+          `Cannot finalize video. Missing ETag from upload response.`,
+        );
+      }
+
+      // A. Finalize (Pass the empty token if that's what we got)
+      await this.finalizeUpload(asset, uploadToken || '', etag, accessToken);
+
+      // B. Wait for Processing
+      await this.waitForProcessing(asset, accessToken);
+    }
+
+    return asset;
   }
 
   private async registerUpload(
-    ownerUrn: string, 
-    recipe: string, 
-    accessToken: string
-  ): Promise<{ uploadUrl: string; asset: string }> {
-    
-    const body = {
-      registerUploadRequest: {
-        recipes: [recipe],
-        owner: ownerUrn,
-        serviceRelationships: [
-          {
-            relationshipType: 'OWNER',
-            identifier: 'urn:li:userGeneratedContent'
-          }
-        ]
-      }
-    };
-
-    const actionUrl = `${this.BASE_URL}/images?action=initializeUpload`; // For images
-    // Note: LinkedIn splits endpoints. 
-    // Images -> /images?action=initializeUpload
-    // Videos -> /videos?action=initializeUpload
-    
-    const endpoint = recipe.includes('video') 
+    ownerUrn: string,
+    recipe: string,
+    accessToken: string,
+    fileSize?: number,
+  ): Promise<{ uploadUrl: string; asset: string; uploadToken?: string }> {
+    const isVideo = recipe.includes('video');
+    const endpoint = isVideo
       ? `${this.BASE_URL}/videos?action=initializeUpload`
       : `${this.BASE_URL}/images?action=initializeUpload`;
+
+    const initializeUploadRequest: any = {
+      owner: ownerUrn,
+    };
+
+    if (isVideo) {
+      if (!fileSize)
+        throw new Error(
+          'File size is required for LinkedIn Video initialization',
+        );
+      initializeUploadRequest.fileSizeBytes = fileSize;
+      initializeUploadRequest.uploadCaptions = false;
+      initializeUploadRequest.uploadThumbnail = false;
+    }
+
+    const body = { initializeUploadRequest };
 
     const response = await firstValueFrom(
       this.http.post(endpoint, body, {
         headers: this.getHeaders(accessToken),
-      })
+        httpsAgent: this.httpsAgent,
+        timeout: 30000,
+      }),
     );
 
     const data = response.data.value;
+
     const uploadUrl = data.uploadUrl || data.uploadInstructions?.[0]?.uploadUrl;
-    const asset = data.image || data.video; // Returns URN
+    const asset = data.image || data.video || data.asset;
+
+    // Check both locations, but default to empty string if missing (Valid for Single-Put)
+    const uploadToken =
+      data.uploadToken || data.uploadInstructions?.[0]?.uploadToken || '';
 
     if (!uploadUrl || !asset) {
-      throw new Error('Failed to register upload with LinkedIn');
+      throw new Error(
+        'Failed to register upload with LinkedIn (Missing URL or Asset URN)',
+      );
     }
 
-    return { uploadUrl, asset };
+    return { uploadUrl, asset, uploadToken };
   }
-
   /**
    * Streams file from CDN to LinkedIn Upload URL
    */
-  private async uploadBinary(uploadUrl: string, fileUrl: string): Promise<void> {
-    this.logger.log(`Streaming binary to LinkedIn...`);
+  private async uploadBinary(
+    uploadUrl: string,
+    fileUrl: string,
+  ): Promise<string> {
+    this.logger.log(`[2/3] Streaming binary to LinkedIn Upload URL...`);
 
     // 1. Get Stream
     const fileStream = await this.http.axiosRef({
       url: fileUrl,
       method: 'GET',
       responseType: 'stream',
+      httpsAgent: this.httpsAgent,
+      timeout: 30000,
     });
 
-    // 2. PUT Stream
-    await this.http.axiosRef({
+    // 2. Upload Stream
+    const response = await this.http.axiosRef({
       url: uploadUrl,
-      method: 'PUT', // LinkedIn uses PUT for binary uploads
+      method: 'PUT',
       data: fileStream.data,
       headers: {
         'Content-Type': 'application/octet-stream',
-        // LinkedIn strict requirement: Do NOT send Authorization header to the uploadUrl
-        // It uses a signed URL.
       },
+      httpsAgent: this.httpsAgent,
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
+      timeout: 60000 * 10, // 10 minutes for slow uploads
     });
+
+    // 3. Extract ETag (Case Insensitive Check)
+    // Axios headers are usually lowercase, but we check both to be safe.
+    const etag = response.headers['etag'] || response.headers['ETag'];
+
+    this.logger.debug(
+      `[Upload Complete] Status: ${response.status} | ETag: ${etag}`,
+    );
+
+    if (!etag) {
+      this.logger.error(
+        'Full Upload Headers:',
+        JSON.stringify(response.headers),
+      );
+      // We return empty string instead of throwing, so handleMediaUpload can throw the specific error
+      return '';
+    }
+
+    return etag;
   }
 
+  private async finalizeUpload(
+    videoUrn: string,
+    uploadToken: string,
+    etag: string,
+    accessToken: string,
+  ): Promise<void> {
+    this.logger.log(
+      `Finalizing LinkedIn Video ${videoUrn} (Token: ${uploadToken || 'EMPTY'})...`,
+    );
+
+    const body = {
+      finalizeUploadRequest: {
+        video: videoUrn,
+        uploadToken: uploadToken, // Send specific token or empty string
+        uploadedPartIds: [etag],
+      },
+    };
+
+    await firstValueFrom(
+      this.http.post(`${this.BASE_URL}/videos?action=finalizeUpload`, body, {
+        headers: this.getHeaders(accessToken),
+        httpsAgent: this.httpsAgent,
+      }),
+    );
+  }
+
+  private async waitForProcessing(
+    videoUrn: string,
+    accessToken: string,
+  ): Promise<void> {
+    let status = 'PROCESSING';
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    this.logger.log(`[3/3] Waiting for video processing: ${videoUrn}`);
+
+    const encodedUrn = encodeURIComponent(videoUrn);
+
+    while (status !== 'AVAILABLE' && attempts < maxAttempts) {
+      await new Promise((r) => setTimeout(r, 4000));
+
+      const response = await firstValueFrom(
+        this.http.get(`${this.BASE_URL}/videos/${encodedUrn}`, {
+          headers: this.getHeaders(accessToken),
+          httpsAgent: this.httpsAgent,
+        }),
+      );
+
+      status = response.data.status;
+      this.logger.debug(`Video Status: ${status} (Attempt ${attempts + 1})`);
+
+      if (status === 'FAILED')
+        throw new Error('LinkedIn Video Processing Failed');
+      attempts++;
+    }
+
+    if (status !== 'AVAILABLE') throw new Error('Video upload timed out.');
+  }
   // ===========================================================================
   // HELPERS
   // ===========================================================================
 
   private getHeaders(accessToken: string) {
     return {
-      'Authorization': `Bearer ${accessToken}`,
+      Authorization: `Bearer ${accessToken}`,
       'LinkedIn-Version': this.API_VERSION,
       'X-Restli-Protocol-Version': '2.0.0',
       'Content-Type': 'application/json',
@@ -277,7 +417,8 @@ export class LinkedInPlatformService extends BasePlatformService {
   }
 
   private formatPostUrn(id: string): string {
-    if (id.startsWith('urn:li:share:') || id.startsWith('urn:li:ugcPost:')) return id;
+    if (id.startsWith('urn:li:share:') || id.startsWith('urn:li:ugcPost:'))
+      return id;
     return `urn:li:share:${id}`; // Default fallback
   }
 

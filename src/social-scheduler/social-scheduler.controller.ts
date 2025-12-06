@@ -6,6 +6,7 @@ import {
   Param,
   Post,
   Get,
+  Query,
 } from '@nestjs/common';
 import { SocialSchedulerService } from './services/social-scheduler.service';
 import {
@@ -58,7 +59,7 @@ export class SocialSchedulerController {
     return this.service.publishImmediately(postId);
   }
 
-  @Delete(':postId/:organizationId/cancel')
+  @Delete(':postId/cancel')
   @ApiOperation({
     summary: 'Cancel a scheduled Facebook post',
     description: `
@@ -77,7 +78,7 @@ export class SocialSchedulerController {
   })
   async cancelScheduledPost(
     @Param('postId') postId: string,
-    @Param('organizationId') organizationId: string,
+    @Query('organizationId') organizationId?: string,
   ) {
     return this.service.cancelScheduledPost(postId, organizationId);
   }

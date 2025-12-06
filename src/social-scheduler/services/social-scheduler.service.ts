@@ -168,7 +168,7 @@ export class SocialSchedulerService {
 
   async cancelScheduledPost(
     postId: string,
-    organizationId: string,
+    organizationId?: string,
   ): Promise<CancelResult> {
     try {
       const post = await this.postRepo.findById(postId, organizationId);
@@ -204,7 +204,7 @@ export class SocialSchedulerService {
       if (!resourceId) return; // Nothing to delete on platform
 
       const pageAccount = post.pageAccount;
-      if (!pageAccount?.accessToken) return;
+      if (pageAccount && !pageAccount?.accessToken) return;
 
       const accessToken = await this.encryptionService.decrypt(
         pageAccount.accessToken,

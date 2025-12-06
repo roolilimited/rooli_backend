@@ -10,10 +10,12 @@ export class CreatePostDto {
   socialAccountId: string;
 
   @ApiPropertyOptional({ description: 'Social account to publish under' })
+  @IsOptional()
   @IsString()
   organizationId?: string;
 
   @ApiProperty({ description: 'Page account to publish under' })
+  @IsOptional()
   @IsString()
   pageAccountId?: string;
 

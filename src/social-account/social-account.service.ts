@@ -186,6 +186,46 @@ export class SocialAccountService {
     }
   }
 
+async getAvailableAccountsForUser(organizationId: string, userId: string) {
+  // 1. Fetch all accounts linked to the Org
+  const accounts = await this.prisma.socialAccount.findMany({
+    where: { organizationId },
+    include: { pages: true } // Include the child pages
+  });
+
+  const availableDestinations = [];
+
+  for (const account of accounts) {
+    // RULE 1: PROFILES are Private
+    // Only allow usage if the current user is the one who connected it
+    if (account.accountType === 'PROFILE') {
+      if (account.connectedById === userId) {
+        availableDestinations.push({
+          id: account.id,
+          name: account.name,
+          type: 'PROFILE',
+          avatar: account.profileImage
+        });
+      }
+    }
+
+    // RULE 2: PAGES are Shared
+    // Always allow usage (assuming the user is part of the Org)
+    if (account.pages && account.pages.length > 0) {
+      for (const page of account.pages) {
+        availableDestinations.push({
+          id: page.id, // The PageAccount ID
+          name: page.name,
+          type: 'PAGE',
+          avatar: page.profilePicture
+        });
+      }
+    }
+  }
+
+  return availableDestinations;
+}
+
   /**
    * Update last posted timestamp
    * Used after successful post publication

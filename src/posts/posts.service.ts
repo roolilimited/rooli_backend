@@ -321,26 +321,6 @@ export class PostsService {
           'Page not found or not associated with this social account',
         );
       }
-
-      // Additional validation for LinkedIn pages
-      if (
-        socialAccount.platform === 'LINKEDIN' &&
-        socialAccount.accountType !== 'PAGE'
-      ) {
-        throw new BadRequestException(
-          'Cannot post to LinkedIn pages using a profile account',
-        );
-      }
-    } else {
-      // This is a PROFILE post - validate account type
-      if (
-        socialAccount.platform === 'LINKEDIN' &&
-        socialAccount.accountType !== 'PROFILE'
-      ) {
-        throw new BadRequestException(
-          'Cannot create profile post using a pages account. Please select a specific page.',
-        );
-      }
     }
 
     // Validate media files
