@@ -184,25 +184,36 @@ async publishImmediately(post: TwitterScheduledPost): Promise<PublishingResult> 
    * Downloads file from CDN and uploads to Twitter using v1.1 API.
    * Twitter requires binary buffer or path.
    */
-  private async uploadMedia(client: TwitterApi, url: string): Promise<string> {
-    //  Download File to Buffer
+private async uploadMedia(client: TwitterApi, url: string): Promise<string> {
+    this.logger.debug(`Downloading media from Cloudinary: ${url}`);
+
+    // 1. Download to Buffer
     const response = await firstValueFrom(
       this.http.get(url, { responseType: 'arraybuffer' })
     );
     const buffer = Buffer.from(response.data);
     const contentType = response.headers['content-type'];
 
-    // 2. Determine MediaType for Twitter
-    // Twitter needs to know if it's a video to process it asynchronously
+    // 2. Detect MIME Type
     const mimeType = this.getMimeType(contentType, url);
-    const isVideo = mimeType.startsWith('video');
+    
+    // 3. Determine if Video (Check Mime OR Cloudinary URL pattern)
+    const isVideo = mimeType.startsWith('video') || url.includes('/video/');
 
-   // 3. Upload
+    this.logger.debug(`Detected Type: ${mimeType} | Is Video? ${isVideo}`);
+
+    // 4. Upload to Twitter
+    // CRITICAL: Type must be 'tweet_video' for MP4s, or Twitter rejects it.
     const mediaId = await client.v1.uploadMedia(buffer, {
       mimeType: mimeType as EUploadMimeType,
-      type: isVideo ? 'tweet_video' : 'tweet_image', 
+      type: isVideo ? 'tweet_video' : 'tweet_image',
       target: 'tweet'
     });
+
+    // 5. Wait for Processing (Required for Videos)
+    if (isVideo) {
+      await this.waitForProcessing(client, mediaId);
+    }
 
     return mediaId;
   }
@@ -224,12 +235,70 @@ async publishImmediately(post: TwitterScheduledPost): Promise<PublishingResult> 
     return url.match(/\.(mp4|mov|avi|mkv)$/i) !== null;
   }
 
-  private getMimeType(headerType: string, url: string): string {
-    if (headerType) return headerType;
-    if (url.endsWith('.mp4')) return 'video/mp4';
-    if (url.endsWith('.jpg') || url.endsWith('.jpeg')) return 'image/jpeg';
-    if (url.endsWith('.png')) return 'image/png';
-    if (url.endsWith('.gif')) return 'image/gif';
-    return 'image/jpeg'; // Default fallback
+private getMimeType(headerType: string, url: string): string {
+    // 1. Clean the URL
+    const lowerUrl = url.toLowerCase();
+
+    // 2. CLOUDINARY SPECIFIC CHECK
+    if (lowerUrl.includes('/video/upload/') || lowerUrl.includes('/video/private/')) {
+       // Default to mp4 if we know it's a Cloudinary video but don't have an extension
+       return 'video/mp4';
+    }
+
+    // 3. Trust the header ONLY if it is specific
+    if (headerType && headerType !== 'application/octet-stream') {
+      return headerType;
+    }
+
+    // 4. Extension Detection
+    if (lowerUrl.endsWith('.mp4')) return 'video/mp4';
+    if (lowerUrl.endsWith('.mov')) return 'video/quicktime';
+    if (lowerUrl.endsWith('.avi')) return 'video/x-msvideo';
+    
+    // Images
+    if (lowerUrl.endsWith('.jpg') || lowerUrl.endsWith('.jpeg')) return 'image/jpeg';
+    if (lowerUrl.endsWith('.png')) return 'image/png';
+    if (lowerUrl.endsWith('.gif')) return 'image/gif';
+    if (lowerUrl.endsWith('.webp')) return 'image/webp';
+
+    // 5. Fallback (Twitter defaults to treating this as an image, which causes the crash if it's actually a video)
+    return 'image/jpeg'; 
+  }
+
+  private async waitForProcessing(client: TwitterApi, mediaId: string): Promise<void> {
+    this.logger.log(`Waiting for Twitter video processing: ${mediaId}`);
+    
+    // Max wait: 60 seconds (usually takes 5-10s)
+    const maxRetries = 20; 
+    let retries = 0;
+
+    while (retries < maxRetries) {
+      // Fetch Status
+      const info = await client.v1.mediaInfo(mediaId);
+      const processingInfo = info.processing_info;
+
+      // If no processing_info, it means it's done or wasn't required (small files)
+      if (!processingInfo) return;
+
+      const state = processingInfo.state;
+
+      if (state === 'succeeded') {
+        this.logger.debug(`Video ${mediaId} processed successfully.`);
+        return;
+      }
+
+      if (state === 'failed') {
+        const error = processingInfo.error?.message || 'Unknown error';
+        throw new Error(`Twitter Video Processing Failed: ${error}`);
+      }
+
+      // Twitter tells us how long to wait (check_after_secs), default to 2s
+      const waitSecs = processingInfo.check_after_secs || 2;
+      await new Promise(r => setTimeout(r, waitSecs * 1000));
+      
+      retries++;
+    }
+
+    throw new Error('Twitter video processing timed out');
   }
 }

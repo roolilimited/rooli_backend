@@ -18,6 +18,7 @@ import { QueueService } from './queue.service';
 import { Platform, PostStatus, ScheduleJobStatus } from '@generated/enums';
 import { differenceInMilliseconds } from 'date-fns/differenceInMilliseconds';
 import { LinkedInPlatformService } from '../platforms/linkedIn-platform.service';
+import { TwitterPlatformService } from '../platforms/twitter-platform.service';
 
 @Injectable()
 export class SocialSchedulerService {
@@ -32,6 +33,7 @@ export class SocialSchedulerService {
     private readonly encryptionService: EncryptionService,
     private readonly instagramService: InstagramPlatformService,
     private readonly linkedInService: LinkedInPlatformService,
+    private readonly twitterService: TwitterPlatformService,
     private readonly prepareService: PreparePostService,
     private readonly postRepo: PostRepository,
     private readonly queueService: QueueService,
@@ -43,6 +45,7 @@ export class SocialSchedulerService {
     this.platformServices[Platform.FACEBOOK] = this.facebookService;
     this.platformServices[Platform.INSTAGRAM] = this.instagramService;
     this.platformServices[Platform.LINKEDIN] = this.linkedInService;
+    this.platformServices[Platform.X] = this.twitterService
   }
 
   async schedulePost(postId: string): Promise<ScheduleResult> {

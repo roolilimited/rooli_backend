@@ -3,7 +3,6 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 
 import {
-  ScheduledPost,
   PublishingResult,
   LinkedInScheduledPost,
 } from '../interfaces/social-scheduler.interface';
@@ -13,7 +12,7 @@ import * as https from 'https';
 @Injectable()
 export class LinkedInPlatformService extends BasePlatformService {
   readonly platform = 'LINKEDIN';
-  private readonly API_VERSION = '202501'; // Use a recent version
+  private readonly API_VERSION = '202501';
   private readonly BASE_URL = 'https://api.linkedin.com/rest';
 
   private readonly httpsAgent = new https.Agent({
@@ -32,13 +31,11 @@ export class LinkedInPlatformService extends BasePlatformService {
 
   /**
    * We essentially just validate the token here.
-   * We do NOT pre-upload assets because LinkedIn assets can expire if unused.
+   * 
    */
   async schedulePost(post: LinkedInScheduledPost): Promise<PublishingResult> {
     return this.makeApiRequest(async () => {
       this.validatePost(post);
-      // We return success to tell the Scheduler "Go ahead and queue this in BullMQ"
-      // We don't return a containerId because we build it Just-In-Time.
       return { success: true };
     }, 'validate LinkedIn post');
   }
@@ -143,7 +140,6 @@ export class LinkedInPlatformService extends BasePlatformService {
         }
       } else {
         // Multi-Image (Carousel is slightly different, but Multi-Image is standard)
-        // Note: LinkedIn API v2 'posts' endpoint handles multi-image via 'multiImage' type
         postBody.content = {
           multiImage: {
             images: assetUrns.map((urn) => ({ id: urn })),
@@ -219,7 +215,6 @@ export class LinkedInPlatformService extends BasePlatformService {
 
     // 4. Video Specific Steps
     if (isVideo) {
-      // STRICT CHECK REMOVED: uploadToken is allowed to be empty
       if (!etag) {
         throw new Error(
           `Cannot finalize video. Missing ETag from upload response.`,
@@ -276,7 +271,6 @@ export class LinkedInPlatformService extends BasePlatformService {
     const uploadUrl = data.uploadUrl || data.uploadInstructions?.[0]?.uploadUrl;
     const asset = data.image || data.video || data.asset;
 
-    // Check both locations, but default to empty string if missing (Valid for Single-Put)
     const uploadToken =
       data.uploadToken || data.uploadInstructions?.[0]?.uploadToken || '';
 
@@ -321,7 +315,6 @@ export class LinkedInPlatformService extends BasePlatformService {
     });
 
     // 3. Extract ETag (Case Insensitive Check)
-    // Axios headers are usually lowercase, but we check both to be safe.
     const etag = response.headers['etag'] || response.headers['ETag'];
 
     this.logger.debug(
