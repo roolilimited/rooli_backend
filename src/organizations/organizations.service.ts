@@ -167,23 +167,30 @@ export class OrganizationsService {
     });
   }
 
-  async getOrganizationUsage(
+ async getOrganizationUsage(
     orgId: string,
-    userId: string,
   ): Promise<OrganizationUsageDto> {
-    await this.verifyMembership(orgId, userId);
+    // Validation
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { maxMembers: true, monthlyCreditLimit: true }
+    });
+    if (!org) throw new NotFoundException('Organization not found');
 
-    const [organization, memberCount, creditUsage, postCount, mediaStorage] =
+    // 2. Parallel Count Queries
+    const [memberCount, creditUsage, postCount, mediaStorage] =
       await Promise.all([
-        this.prisma.organization.findUnique({ where: { id: orgId } }),
         this.prisma.organizationMember.count({
           where: { organizationId: orgId, isActive: true },
         }),
+        // Sum of tokens
         this.prisma.aIUsage.aggregate({
           where: { organizationId: orgId },
           _sum: { tokensUsed: true },
         }),
+        // Count posts
         this.prisma.post.count({ where: { organizationId: orgId } }),
+        // Sum file size (Storage usage)
         this.prisma.mediaFile.aggregate({
           where: { organizationId: orgId },
           _sum: { size: true },
@@ -194,12 +201,13 @@ export class OrganizationsService {
       memberCount,
       creditUsage: creditUsage._sum.tokensUsed || 0,
       postCount,
-      mediaStorage: mediaStorage._sum.size || 0,
-      maxMembers: organization.maxMembers,
-      monthlyCreditLimit: organization.monthlyCreditLimit,
+      mediaStorage: mediaStorage._sum.size || 0, // in bytes
+      maxMembers: org.maxMembers,
+      monthlyCreditLimit: org.monthlyCreditLimit,
     };
   }
 
+  //this should be in the analytics module
   async getOrganizationStats(
     orgId: string,
     userId: string,
@@ -274,38 +282,6 @@ export class OrganizationsService {
     return memberCount < organization.maxMembers;
   }
 
-  async getAllOrganizationMedia(
-    organizationId: string,
-    query: GetOrganizationMediaDto,
-  ) {
-    const { page = 1, limit = 20, type, search } = query;
-    const skip = (page - 1) * limit;
-
-    const where: any = { organizationId };
-
-    if (type) where.mimeType = { startsWith: type }; // e.g. "image" or "video"
-    if (search) where.originalName = { contains: search, mode: 'insensitive' };
-
-    const [data, total] = await Promise.all([
-      this.prisma.mediaFile.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.mediaFile.count({ where }),
-    ]);
-
-    return {
-      data,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
 
   // private async verifyOwnership(orgId: string, userId: string) {
   //   let ownerRole = await this.prisma.role.findUnique({

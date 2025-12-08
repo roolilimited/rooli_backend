@@ -187,22 +187,22 @@ async publishImmediately(post: TwitterScheduledPost): Promise<PublishingResult> 
 private async uploadMedia(client: TwitterApi, url: string): Promise<string> {
     this.logger.debug(`Downloading media from Cloudinary: ${url}`);
 
-    // 1. Download to Buffer
+    // Download to Buffer
     const response = await firstValueFrom(
       this.http.get(url, { responseType: 'arraybuffer' })
     );
     const buffer = Buffer.from(response.data);
     const contentType = response.headers['content-type'];
 
-    // 2. Detect MIME Type
+    // Detect MIME Type
     const mimeType = this.getMimeType(contentType, url);
     
-    // 3. Determine if Video (Check Mime OR Cloudinary URL pattern)
+    // Determine if Video (Check Mime OR Cloudinary URL pattern)
     const isVideo = mimeType.startsWith('video') || url.includes('/video/');
 
     this.logger.debug(`Detected Type: ${mimeType} | Is Video? ${isVideo}`);
 
-    // 4. Upload to Twitter
+    // Upload to Twitter
     // CRITICAL: Type must be 'tweet_video' for MP4s, or Twitter rejects it.
     const mediaId = await client.v1.uploadMedia(buffer, {
       mimeType: mimeType as EUploadMimeType,
@@ -210,7 +210,7 @@ private async uploadMedia(client: TwitterApi, url: string): Promise<string> {
       target: 'tweet'
     });
 
-    // 5. Wait for Processing (Required for Videos)
+    // Wait for Processing (Required for Videos)
     if (isVideo) {
       await this.waitForProcessing(client, mediaId);
     }

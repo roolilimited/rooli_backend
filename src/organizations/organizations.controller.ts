@@ -65,15 +65,6 @@ export class OrganizationsController {
     return this.organizationsService.getAllOrganizations(query);
   }
 
-  @Get('organizationId/media')
-  @ApiOperation({ summary: 'Get all media files for an organization' })
-  async getAllOrganizationMedia(
-    @Param('organizationId') orgId: string,
-    @Query() query: GetOrganizationMediaDto,
-  ) {
-    return this.organizationsService.getAllOrganizationMedia(orgId, query);
-  }
-
   @Get(':id')
   @ApiOperation({
     summary: 'Get organization',
@@ -132,7 +123,7 @@ export class OrganizationsController {
 
   @Delete(':id')
   @ApiOperation({
-    summary: 'Delete organization',
+    summary: 'Deactivate an organization',
     description:
       'Soft deletes an organization and deactivates all members. Only owners can perform this.',
   })
@@ -159,10 +150,9 @@ export class OrganizationsController {
     type: OrganizationUsageDto,
   })
   async getUsage(
-    @Req() req,
     @Param('id') orgId: string,
   ): Promise<OrganizationUsageDto> {
-    return this.organizationsService.getOrganizationUsage(orgId, req.user.id);
+    return this.organizationsService.getOrganizationUsage(orgId);
   }
 
   @Get(':id/stats')
