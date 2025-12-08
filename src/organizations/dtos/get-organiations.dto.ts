@@ -1,6 +1,7 @@
 import { PaginationDto } from "@/common/dtos/pagination.dto";
 import { PlanTier, PlanStatus } from "@generated/enums";
 import { ApiPropertyOptional } from "@nestjs/swagger";
+import { Type } from "class-transformer";
 import { IsOptional, IsString, IsBoolean, IsEnum} from "class-validator";
 
 export class GetAllOrganizationsDto extends PaginationDto {
@@ -11,6 +12,7 @@ export class GetAllOrganizationsDto extends PaginationDto {
 
   @ApiPropertyOptional({ description: 'Filter by active status' })
   @IsOptional()
+  @Type(() => Boolean)
   @IsBoolean()
   isActive?: boolean;
 
